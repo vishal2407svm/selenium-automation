@@ -26,9 +26,9 @@ public class DamsDelhiLogin {
     private static SimpleDateFormat fileFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
     private static String executionStartTime;
     
-    // FIXED: Increased default timeout to 30 seconds for reliability in CI
+    // Increased default timeout to 30 seconds for reliability in CI
     private static final Duration DEFAULT_WAIT_TIMEOUT = Duration.ofSeconds(30);
-    // FIXED: Increased QR code wait to 90 seconds, as payment gateways can be slow
+    // Increased QR code wait to 90 seconds, as payment gateways can be slow
     private static final Duration QR_CODE_WAIT_TIMEOUT = Duration.ofSeconds(90);
 
 
@@ -138,7 +138,7 @@ public class DamsDelhiLogin {
             driver.manage().window().maximize();
         }
         
-        // FIXED: Initialize wait with default timeout
+        // Initialize wait with default timeout
         wait = new WebDriverWait(driver, DEFAULT_WAIT_TIMEOUT);
         js = (JavascriptExecutor) driver;
         
@@ -150,7 +150,7 @@ public class DamsDelhiLogin {
         
         driver.get("https://www.damsdelhi.com/");
         
-        // FIXED: Replaced sleep(3) with explicit wait
+        // Replaced sleep(3) with explicit wait
         try {
             WebElement signInBtn = wait.until(ExpectedConditions.elementToBeClickable(
                 By.xpath("//button[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
@@ -169,13 +169,13 @@ public class DamsDelhiLogin {
             }
         }
         
-        // FIXED: Wait for phone input to be visible
+        // Wait for phone input to be visible
         enterText(By.xpath("//input[@type='tel' or @type='number' or contains(@placeholder, 'number')]"), 
                   "+919456628016", "Phone");
         
         clickElement(By.className("common-bottom-btn"), "Request OTP");
         
-        // FIXED: Wait for OTP input to be visible instead of sleeping
+        // Wait for OTP input to be visible instead of sleeping
         try {
             wait.until(ExpectedConditions.visibilityOfElementLocated(
                 By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]")));
@@ -203,7 +203,7 @@ public class DamsDelhiLogin {
         
         clickElement(By.className("common-bottom-btn"), "Submit OTP");
         
-        // FIXED: Replaced sleep(5) with wait for hamburger icon, proving login
+        // Replaced sleep(5) with wait for hamburger icon, proving login
         try {
             wait.until(ExpectedConditions.presenceOfElementLocated(By.className("humburgerIcon")));
             System.out.println("✓ Login successful (hamburger icon found)\n");
@@ -227,7 +227,7 @@ public class DamsDelhiLogin {
                 js.executeScript("arguments[0].click();", dropdown);
                 System.out.println("  ✓ Clicked: Course Dropdown");
                 
-                // FIXED: Wait for dropdown options to appear
+                // Wait for dropdown options to appear
                 wait.until(ExpectedConditions.visibilityOfElementLocated(
                     By.xpath("//span[contains(text(), 'NEET PG')] | //div[contains(text(), 'NEET PG')]")));
             } catch (Exception e) {
@@ -242,7 +242,7 @@ public class DamsDelhiLogin {
                     if (option.isDisplayed()) {
                         js.executeScript("arguments[0].click();", option);
                         System.out.println("  ✓ Selected: NEET PG");
-                        // FIXED: Wait for modal or hamburger to be clickable after selection
+                        // Wait for modal or hamburger to be clickable after selection
                         wait.until(ExpectedConditions.or(
                             ExpectedConditions.elementToBeClickable(By.className("humburgerIcon")),
                             ExpectedConditions.elementToBeClickable(By.xpath("//button[@type='button' and @aria-label='Close']"))
@@ -273,7 +273,7 @@ public class DamsDelhiLogin {
             System.out.println("  ✓ Clicked: Hamburger Menu");
             
             // Step 5: Click CBT button in the sidebar
-            // FIXED: Wait for sidebar to be visible
+            // Wait for sidebar to be visible
             wait.until(ExpectedConditions.visibilityOfElementLocated(
                 By.xpath("//div[contains(@class, 'Categories')]")));
                 
@@ -310,14 +310,14 @@ public class DamsDelhiLogin {
             
             // Step 6: Click OK button (Red button) if it appears
             try {
-                // FIXED: Wait for OK button to be clickable
+                // Wait for OK button to be clickable
                 WebElement okBtn = wait.until(ExpectedConditions.elementToBeClickable(
                     By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", okBtn);
                 js.executeScript("arguments[0].click();", okBtn);
                 System.out.println("  ✓ Clicked: OK Button (Red)");
-                // FIXED: Wait for page to reload by waiting for *any* button (a bit of a guess)
-                wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//button[contains(@class, 'butBtn')]")));
+                // Wait for page to reload by waiting for *any* course card (div with 'col' and a button)
+                wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//div[contains(@class, 'col') and .//button]")));
             } catch (Exception e) {
                 System.out.println("  ℹ No OK button to click (may not be needed)");
             }
@@ -338,20 +338,23 @@ public class DamsDelhiLogin {
         try {
             System.out.println("  → Current URL: " + driver.getCurrentUrl());
             
-            // FIXED: Replaced sleep(5) with a robust wait for the *first button* to appear.
-            // This is the MOST LIKELY fix for the "0 courses" problem.
-            By firstButtonSelector = By.xpath("//button[contains(@class, 'butBtn')]");
+            // --- MAJOR FIX ---
+            // Replaced sleep(5) with a robust wait for the *first course card container* to appear.
+            // This is more reliable than waiting for a specific button class.
+            // We define a "course card" as a div with class 'col' that contains a button.
+            By firstCourseCardSelector = By.xpath("//div[contains(@class, 'col') and .//button]");
             try {
-                System.out.println("  → Waiting up to 30s for course buttons to load...");
-                wait.until(ExpectedConditions.presenceOfElementLocated(firstButtonSelector));
-                System.out.println("  ✓ Course buttons (or at least one) are present.");
+                System.out.println("  → Waiting up to 30s for first course card to load...");
+                wait.until(ExpectedConditions.presenceOfElementLocated(firstCourseCardSelector));
+                System.out.println("  ✓ Course card (or at least one) is present.");
             } catch (Exception e) {
-                System.out.println("  ✗ CRITICAL: Waited 30s but no 'butBtn' buttons found.");
+                System.out.println("  ✗ CRITICAL: Waited 30s but no 'course card' (div with class 'col' and a button) found.");
                 System.out.println("  → This is why 0 courses are being found.");
-                takeDebugScreenshot("3_NoButtonsFoundAfterWait");
+                takeDebugScreenshot("3_NoCourseCardsFoundAfterWait");
                 savePageSource();
                 return courses; // Return empty list
             }
+            // --- END OF FIX ---
             
             js.executeScript("window.scrollTo(0, 0);");
             sleep(1); // Short sleep after scroll
@@ -382,13 +385,20 @@ public class DamsDelhiLogin {
             
             takeDebugScreenshot("3_BeforeFindingButtons");
             
-            // --- This discovery logic is unchanged, but now it runs *after* we've waited ---
-            
             List<WebElement> buyNowButtons = new ArrayList<>();
+            // FIXED: Added more generic selectors. We will try these one by one.
             By[] buttonSelectors = {
+                // 1. Original specific selector
                 By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"),
+                // 2. Original generic 'butBtn'
                 By.xpath("//button[contains(@class, 'butBtn')]"),
+                // 3. NEW: Generic "Buy Now" text search (more robust)
+                By.xpath("//div[contains(@class, 'col')]//button[contains(normalize-space(), 'Buy Now')]"),
+                // 4. NEW: Any button inside a 'col' div that *doesn't* say "View" or "Details"
+                By.xpath("//div[contains(@class, 'col')]//button[not(contains(., 'View')) and not(contains(., 'Details'))]"),
+                // 5. Original: Any button text containing "Buy"
                 By.xpath("//button[contains(text(), 'Buy') or contains(text(), 'buy')]"),
+                // 6. Original: Any button inside a 'col'
                 By.xpath("//div[contains(@class, 'col')]//button[@type='button']")
             };
 
@@ -498,8 +508,28 @@ public class DamsDelhiLogin {
         
         try {
             // Step 1: Find and click the specific Buy Now button
-            List<WebElement> buyButtons = driver.findElements(
-                By.xpath("//button[@type='button' and contains(@class, 'butBtn')]"));
+            // FIXED: Use the same robust selector logic from discoverCBTCourses
+            List<WebElement> buyButtons = new ArrayList<>();
+            By[] buttonSelectors = {
+                By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"),
+                By.xpath("//button[contains(@class, 'butBtn')]"),
+                By.xpath("//div[contains(@class, 'col')]//button[contains(normalize-space(), 'Buy Now')]"),
+                By.xpath("//div[contains(@class, 'col')]//button[not(contains(., 'View')) and not(contains(., 'Details'))]"),
+                By.xpath("//button[contains(text(), 'Buy') or contains(text(), 'buy')]"),
+                By.xpath("//div[contains(@class, 'col')]//button[@type='button']")
+            };
+
+            for (By selector : buttonSelectors) {
+                buyButtons = driver.findElements(selector);
+                if (!buyButtons.isEmpty()) {
+                    System.out.println("  → Found " + buyButtons.size() + " buttons using selector: " + selector);
+                    break;
+                }
+            }
+
+            if (buyButtons.isEmpty()) {
+                throw new Exception("Could not find any Buy buttons with any selector");
+            }
             
             if (courseIndex < buyButtons.size()) {
                 WebElement buyBtn = buyButtons.get(courseIndex);
@@ -507,12 +537,12 @@ public class DamsDelhiLogin {
                 js.executeScript("arguments[0].click();", buyBtn);
                 System.out.println("  ✓ Step 1: Clicked Buy Now");
             } else {
-                throw new Exception("Buy button not found for index " + courseIndex);
+                throw new Exception("Buy button not found for index " + courseIndex + ". (Found " + buyButtons.size() + " buttons)");
             }
             
             // Step 1.5: Handle CBT (Center Based Test) Modal
             try {
-                // FIXED: Wait for modal to be visible
+                // Wait for modal to be visible
                 WebElement cbtModal = wait.until(ExpectedConditions.visibilityOfElementLocated(
                     By.xpath("//div[@class='popup' and .//div[@id='cbt_hide']]")));
                 System.out.println("  ✓ Step 1.5a: CBT Modal detected.");
@@ -533,7 +563,7 @@ public class DamsDelhiLogin {
             
             // Step 2: Click Flex button (City Selection - show_data_city)
             try {
-                // FIXED: Wait for button to be clickable
+                // Wait for button to be clickable
                 WebElement flexBtn = wait.until(ExpectedConditions.elementToBeClickable(
                     By.xpath("//button[contains(@class, 'show_data_city')]")));
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", flexBtn);
@@ -545,7 +575,7 @@ public class DamsDelhiLogin {
             
             // Step 3: Select Delhi location
             try {
-                // FIXED: Wait for Delhi button to be clickable
+                // Wait for Delhi button to be clickable
                 WebElement delhiBtn = wait.until(ExpectedConditions.elementToBeClickable(
                     By.xpath("//button[contains(text(), 'Delhi') or contains(@data-city, 'Delhi')]")));
                 js.executeScript("arguments[0].click();", delhiBtn);
@@ -556,7 +586,7 @@ public class DamsDelhiLogin {
             
             // Step 4: Click Red Button (Place Order - btn-danger btn-block)
             try {
-                // FIXED: Wait for Red button to be clickable
+                // Wait for Red button to be clickable
                 WebElement redBtn = wait.until(ExpectedConditions.elementToBeClickable(
                     By.xpath("//button[contains(@class, 'btn-danger') and contains(@class, 'btn-block')]")));
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", redBtn);
@@ -568,7 +598,7 @@ public class DamsDelhiLogin {
             
             // Step 5: Select Paytm payment option
             try {
-                // FIXED: Wait for Paytm option to be visible
+                // Wait for Paytm option to be visible
                 By paytmSelector = By.xpath("//label[.//span[contains(text(), 'Paytm')]] | //span[contains(text(), 'Paytm')]/ancestor::label");
                 WebElement paytm = wait.until(ExpectedConditions.visibilityOfElementLocated(paytmSelector));
                 js.executeScript("arguments[0].click();", paytm);
@@ -579,7 +609,7 @@ public class DamsDelhiLogin {
             
             // Step 6: Click Payment button
             try {
-                // FIXED: Wait for Payment button to be clickable
+                // Wait for Payment button to be clickable
                 By paymentSelector = By.xpath("//button[@type='button' and contains(@class, 'ant-btn-primary')] | //button[contains(text(), 'Pay')]");
                 WebElement paymentBtn = wait.until(ExpectedConditions.elementToBeClickable(paymentSelector));
                 js.executeScript("arguments[0].click();", paymentBtn);
@@ -636,13 +666,13 @@ public class DamsDelhiLogin {
             
             driver.get("https://www.damsdelhi.com/");
             
-            // FIXED: Wait for hamburger to be clickable
+            // Wait for hamburger to be clickable
             WebElement hamburger = wait.until(ExpectedConditions.elementToBeClickable(
                 By.className("humburgerIcon")));
             js.executeScript("arguments[0].click();", hamburger);
             System.out.println("  ✓ Clicked: Hamburger Menu");
             
-            // FIXED: Wait for CBT button to be clickable
+            // Wait for CBT button to be clickable
             By cbtSelector = By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]");
             WebElement cbtElem = wait.until(ExpectedConditions.elementToBeClickable(cbtSelector));
             
@@ -656,7 +686,7 @@ public class DamsDelhiLogin {
                 js.executeScript("arguments[0].click();", okBtn);
                 System.out.println("  ✓ Clicked: OK Button (Red)");
                 // Wait for buttons to load again
-                wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//button[contains(@class, 'butBtn')]")));
+                wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//div[contains(@class, 'col') and .//button]")));
             } catch (Exception e) {
                 System.out.println("  ✗ Failed OK button: " + e.getMessage());
             }
@@ -820,7 +850,7 @@ public class DamsDelhiLogin {
             html.append("<div class='container'>\n");
             
             // Header
-            html.append("<div class='header'>\n"); // FIXED: Was missing class
+            html.append("<div class='header'>\n");
             html.append("<h1>🎯 DAMS CBT Automation Report</h1>\n");
             html.append("<p class='subtitle'>Comprehensive CBT Course Purchase Summary</p>\n");
             html.append("</div>\n");
@@ -831,7 +861,7 @@ public class DamsDelhiLogin {
             html.append("<div class='stats-grid'>\n");
             
             html.append("<div class='stat-card'>\n");
-            html.append("<div class='label'>Total Courses Attempted</div>\n");
+            html.append("<div class'label'>Total Courses Attempted</div>\n");
             html.append("<div class='value'>").append(courseResults.size()).append("</div>\n");
             html.append("</div>\n");
             
@@ -840,7 +870,7 @@ public class DamsDelhiLogin {
             html.append("<div class='value'>").append(totalSuccessful).append("</div>\n");
             html.append("</div>\n");
             
-            html.append("<div class 'stat-card failed'>\n");
+            html.append("<div class='stat-card failed'>\n");
             html.append("<div class='label'>Failed Attempts</div>\n");
             html.append("<div class='value'>").append(totalFailed).append("</div>\n");
             html.append("</div>\n");
@@ -889,7 +919,7 @@ public class DamsDelhiLogin {
                 }
                 
                 if (result.errorMessage != null) {
-                    html.append("<td><span class='error-msg'>").append(result.errorMessage).append("</span></td>\n");
+                    html.append("<td><span class'error-msg'>").append(result.errorMessage).append("</span></td>\n");
                 } else {
                     html.append("<td>-</td>\n");
                 }
