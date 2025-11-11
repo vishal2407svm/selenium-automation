@@ -340,6 +340,9 @@ public class DamsDelhiLogin {
         try {
             System.out.println("  → Current URL: " + driver.getCurrentUrl());
             
+            // Wait for page to load completely
+            sleep(5);
+            
             js.executeScript("window.scrollTo(0, 0);");
             sleep(3);
             
@@ -347,9 +350,10 @@ public class DamsDelhiLogin {
             int stableCount = 0;
             int scrollAttempts = 0;
             
-            while (stableCount < 3 && scrollAttempts < 10) {
-                js.executeScript("window.scrollBy(0, 500);");
-                sleep(2);
+            System.out.println("  → Starting scrolling to load all courses...");
+            while (stableCount < 3 && scrollAttempts < 15) {
+                js.executeScript("window.scrollBy(0, 800);");
+                sleep(3);
                 long newHeight = (Long) js.executeScript("return document.body.scrollHeight");
                 if (newHeight == lastHeight) {
                     stableCount++;
@@ -358,87 +362,209 @@ public class DamsDelhiLogin {
                     lastHeight = newHeight;
                 }
                 scrollAttempts++;
+                System.out.println("    Scroll attempt " + scrollAttempts + " (height: " + newHeight + ")");
             }
             
             System.out.println("  → Scrolled " + scrollAttempts + " times to load all content");
             
             js.executeScript("window.scrollTo(0, 0);");
-            sleep(3);
+            sleep(4);
             
             takeDebugScreenshot("before_finding_buttons");
             
-            List<WebElement> buyNowButtons = driver.findElements(
-                By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
+            // Try multiple button selectors
+            List<WebElement> buyNowButtons = new ArrayList<>();
             
-            System.out.println("  → Found " + buyNowButtons.size() + " Buy Now buttons (primary selector)");
+            // Selector 1: Most specific
+            buyNowButtons = driver.findElements(
+                By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
+            System.out.println("  → Selector 1: Found " + buyNowButtons.size() + " buttons (butBtn modal_show)");
+            
+            // Selector 2: Just butBtn class
+            if (buyNowButtons.isEmpty()) {
+                buyNowButtons = driver.findElements(By.xpath("//button[contains(@class, 'butBtn')]"));
+                System.out.println("  → Selector 2: Found " + buyNowButtons.size() + " buttons (butBtn)");
+            }
+            
+            // Selector 3: Button text contains "Buy"
+            if (buyNowButtons.isEmpty()) {
+                buyNowButtons = driver.findElements(By.xpath("//button[contains(text(), 'Buy') or contains(text(), 'buy')]"));
+                System.out.println("  → Selector 3: Found " + buyNowButtons.size() + " buttons (Buy text)");
+            }
+            
+            // Selector 4: Any button in course cards
+            if (buyNowButtons.isEmpty()) {
+                buyNowButtons = driver.findElements(By.xpath("//div[contains(@class, 'col')]//button[@type='button']"));
+                System.out.println("  → Selector 4: Found " + buyNowButtons.size() + " buttons (in col divs)");
+            }
+            
+            // Selector 5: Most generic - any clickable button
+            if (buyNowButtons.isEmpty()) {
+                buyNowButtons = driver.findElements(By.xpath("//button[@type='button']"));
+                System.out.println("  → Selector 5: Found " + buyNowButtons.size() + " buttons (all buttons)");
+                // Filter to only visible ones
+                List<WebElement> visibleButtons = new ArrayList<>();
+                for (WebElement btn : buyNowButtons) {
+                    try {
+                        if (btn.isDisplayed() && btn.getText().length() > 0) {
+                            visibleButtons.add(btn);
+                        }
+                    } catch (Exception e) {}
+                }
+                buyNowButtons = visibleButtons;
+                System.out.println("  → Filtered to " + buyNowButtons.size() + " visible buttons");
+            }
             
             if (buyNowButtons.isEmpty()) {
-                System.out.println("  → Trying alternate selectors...");
+                System.out.println("  ✗ CRITICAL: No Buy Now buttons found with ANY selector!");
+                System.out.println("  → Checking page source...");
+                String pageSource = driver.getPageSource();
                 
-                buyNowButtons = driver.findElements(By.xpath("//button[contains(@class, 'butBtn')]"));
-                System.out.println("  → Found " + buyNowButtons.size() + " buttons with 'butBtn' class");
-                
-                if (buyNowButtons.isEmpty()) {
-                    buyNowButtons = driver.findElements(By.xpath("//button[contains(text(), 'Buy')]"));
-                    System.out.println("  → Found " + buyNowButtons.size() + " buttons with 'Buy' text");
+                if (pageSource.contains("butBtn")) {
+                    System.out.println("  → Page source CONTAINS 'butBtn' class");
+                } else {
+                    System.out.println("  → Page source DOES NOT contain 'butBtn' class");
                 }
                 
-                if (buyNowButtons.isEmpty()) {
-                    System.out.println("  ✗ No Buy Now buttons found with any selector!");
-                    System.out.println("  → Dumping page source snippet...");
-                    String pageSource = driver.getPageSource();
-                    if (pageSource.contains("butBtn")) {
-                        System.out.println("  → Page source DOES contain 'butBtn'");
-                    } else {
-                        System.out.println("  → Page source does NOT contain 'butBtn'");
-                    }
-                    return courses;
+                if (pageSource.contains("Buy Now") || pageSource.contains("buy now")) {
+                    System.out.println("  → Page source CONTAINS 'Buy Now' text");
+                } else {
+                    System.out.println("  → Page source DOES NOT contain 'Buy Now' text");
                 }
+                
+                // Save page source for debugging
+                try {
+                    FileWriter sourceWriter = new FileWriter("page_source_debug.html");
+                    sourceWriter.write(pageSource);
+                    sourceWriter.close();
+                    System.out.println("  → Page source saved to: page_source_debug.html");
+                } catch (Exception e) {}
+                
+                takeDebugScreenshot("no_buttons_found");
+                return courses;
             }
+            
+            System.out.println("  ✓ Total buttons found: " + buyNowButtons.size());
+            System.out.println("  → Now extracting course names from each button...\n");
             
             for (int i = 0; i < buyNowButtons.size(); i++) {
                 WebElement button = buyNowButtons.get(i);
                 try {
-                    WebElement container = button.findElement(By.xpath("./ancestor::div[contains(@class, 'col')]"));
+                    // Scroll button into view
+                    js.executeScript("arguments[0].scrollIntoView({block: 'center'});", button);
+                    sleep(1);
+                    
+                    // Find the parent container
+                    WebElement container = null;
+                    try {
+                        container = button.findElement(By.xpath("./ancestor::div[contains(@class, 'col')]"));
+                    } catch (Exception e) {
+                        // Try other parent selectors
+                        try {
+                            container = button.findElement(By.xpath("./ancestor::div[contains(@class, 'card')]"));
+                        } catch (Exception e2) {
+                            try {
+                                container = button.findElement(By.xpath("./parent::div/parent::div"));
+                            } catch (Exception e3) {
+                                System.out.println("  ⚠ Button " + (i+1) + ": Could not find parent container");
+                                continue;
+                            }
+                        }
+                    }
                     
                     String courseName = "";
                     
+                    // Method 1: Look for heading tags (h1-h6)
                     try {
                         WebElement titleElem = container.findElement(
-                            By.xpath(".//h3 | .//h4 | .//h5 | .//*[contains(@class, 'title')]"));
+                            By.xpath(".//h1 | .//h2 | .//h3 | .//h4 | .//h5 | .//h6"));
                         courseName = titleElem.getText().trim();
+                        if (!courseName.isEmpty()) {
+                            System.out.println("    [" + (i+1) + "] Method 1 (heading): " + courseName);
+                        }
                     } catch (Exception e) {}
                     
+                    // Method 2: Look for elements with 'title' class
                     if (courseName.isEmpty()) {
                         try {
-                            WebElement linkElem = container.findElement(
-                                By.xpath(".//a[string-length(normalize-space(text())) > 15]"));
-                            courseName = linkElem.getText().trim();
+                            WebElement titleElem = container.findElement(
+                                By.xpath(".//*[contains(@class, 'title') or contains(@class, 'Title')]"));
+                            courseName = titleElem.getText().trim();
+                            if (!courseName.isEmpty()) {
+                                System.out.println("    [" + (i+1) + "] Method 2 (title class): " + courseName);
+                            }
                         } catch (Exception e) {}
                     }
                     
+                    // Method 3: Look for anchor/link with substantial text
+                    if (courseName.isEmpty()) {
+                        try {
+                            WebElement linkElem = container.findElement(
+                                By.xpath(".//a[string-length(normalize-space(text())) > 20]"));
+                            courseName = linkElem.getText().trim();
+                            if (!courseName.isEmpty()) {
+                                System.out.println("    [" + (i+1) + "] Method 3 (link): " + courseName);
+                            }
+                        } catch (Exception e) {}
+                    }
+                    
+                    // Method 4: Look for strong/bold text
+                    if (courseName.isEmpty()) {
+                        try {
+                            WebElement strongElem = container.findElement(
+                                By.xpath(".//strong[string-length(normalize-space(text())) > 20]"));
+                            courseName = strongElem.getText().trim();
+                            if (!courseName.isEmpty()) {
+                                System.out.println("    [" + (i+1) + "] Method 4 (strong): " + courseName);
+                            }
+                        } catch (Exception e) {}
+                    }
+                    
+                    // Method 5: Find any text element with substantial content
                     if (courseName.isEmpty()) {
                         List<WebElement> textElements = container.findElements(
-                            By.xpath(".//*[string-length(normalize-space(text())) > 15]"));
+                            By.xpath(".//*[string-length(normalize-space(text())) > 20]"));
                         for (WebElement elem : textElements) {
                             String text = elem.getText().trim();
                             if (isValidCBTCourseName(text)) {
                                 courseName = text;
+                                System.out.println("    [" + (i+1) + "] Method 5 (text scan): " + courseName);
                                 break;
                             }
                         }
                     }
                     
-                    if (!courseName.isEmpty() && isValidCBTCourseName(courseName)) {
-                        courses.add(courseName);
-                        System.out.println("  → [" + (courses.size()) + "] Found: " + courseName);
-                    } else {
-                        courseName = "CBT Course " + (courses.size() + 1);
-                        courses.add(courseName);
-                        System.out.println("  → [" + (courses.size()) + "] Found: " + courseName + " (generic)");
+                    // Method 6: Get ALL text from container and extract first substantial line
+                    if (courseName.isEmpty()) {
+                        try {
+                            String allText = container.getText().trim();
+                            String[] lines = allText.split("\n");
+                            for (String line : lines) {
+                                line = line.trim();
+                                if (line.length() > 20 && isValidCBTCourseName(line)) {
+                                    courseName = line;
+                                    System.out.println("    [" + (i+1) + "] Method 6 (container text): " + courseName);
+                                    break;
+                                }
+                            }
+                        } catch (Exception e) {}
                     }
+                    
+                    // If still empty, use generic name
+                    if (courseName.isEmpty() || !isValidCBTCourseName(courseName)) {
+                        courseName = "CBT_Course_" + (courses.size() + 1);
+                        System.out.println("    [" + (i+1) + "] Using generic name: " + courseName);
+                    }
+                    
+                    courses.add(courseName);
+                    System.out.println("  ✓ [" + courses.size() + "] Added: " + courseName + "\n");
+                    
                 } catch (Exception e) {
-                    System.out.println("  ⚠ Skipped button " + (i+1) + ": " + e.getMessage());
+                    System.out.println("  ⚠ Button " + (i+1) + " skipped: " + e.getMessage());
+                    // Add generic course name even on error
+                    String fallbackName = "CBT_Course_" + (courses.size() + 1);
+                    courses.add(fallbackName);
+                    System.out.println("  → Added fallback: " + fallbackName + "\n");
                 }
             }
             
