@@ -1,0 +1,372 @@
+name: DAMS CBT Automation (No Maven)
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      run_description:
+        description: 'Description of this run'
+        required: false
+        default: 'Manual execution'
+  
+  # Scheduled runs (optional - runs every day at 9 AM UTC)
+  schedule:
+    - cron: '0 9 * * *'
+  
+  # Trigger on push to main branch
+  push:
+    branches:
+      - main
+    paths:
+      - '**.java'
+      - '.github/workflows/**'
+      - 'lib/**'
+
+jobs:
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: ☕ Setup Java 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+      
+      - name: 🔧 Setup Chrome and ChromeDriver
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      
+      - name: 🔍 Verify Installation
+        run: |
+          echo "=== Chrome Version ==="
+          google-chrome --version
+          echo ""
+          echo "=== ChromeDriver Version ==="
+          chromedriver --version
+          echo ""
+          echo "=== Java Version ==="
+          java -version
+          echo ""
+          echo "=== ChromeDriver Location ==="
+          which chromedriver
+      
+      - name: 📦 Download Selenium JARs
+        run: |
+          mkdir -p lib
+          cd lib
+          
+          echo "Downloading Selenium dependencies..."
+          
+          # Selenium Java 4.15.0
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
+          
+          # Selenium Chrome Driver
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
+          
+          # Selenium API
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.15.0/selenium-api-4.15.0.jar
+          
+          # Selenium Remote Driver
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.15.0/selenium-remote-driver-4.15.0.jar
+          
+          # Selenium Support
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.15.0/selenium-support-4.15.0.jar
+          
+          # Selenium Manager
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-manager/4.15.0/selenium-manager-4.15.0.jar
+          
+          # Selenium HTTP
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.15.0/selenium-http-4.15.0.jar
+          
+          # Additional dependencies
+          wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
+          wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
+          wget -q https://repo1.maven.org/maven2/io/netty/netty-all/4.1.100.Final/netty-all-4.1.100.Final.jar
+          wget -q https://repo1.maven.org/maven2/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/commons/commons-exec/1.3/commons-exec-1.3.jar
+          wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
+          wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
+          wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
+          
+          echo "✓ All JARs downloaded"
+          echo ""
+          echo "Downloaded files:"
+          ls -lh
+      
+      - name: 📁 Create Required Directories
+        run: |
+          mkdir -p screenshots
+          mkdir -p compiled
+          echo "✓ Directories created"
+      
+      - name: 🏗️ Compile Java Code
+        run: |
+          echo "Compiling DamsDelhiLogin.java..."
+          javac -cp "lib/*" -d compiled DamsDelhiLogin.java
+          
+          if [ $? -eq 0 ]; then
+            echo "✓ Compilation successful"
+          else
+            echo "✗ Compilation failed"
+            exit 1
+          fi
+      
+      - name: 🚀 Run DAMS CBT Automation
+        env:
+          CI: true
+        run: |
+          echo "Starting automation execution..."
+          echo "======================================"
+          java -cp "compiled:lib/*" DamsDelhiLogin
+          
+          echo ""
+          echo "======================================"
+          echo "Execution completed"
+        continue-on-error: true
+      
+      - name: 📊 Check Results
+        if: always()
+        run: |
+          echo "=== Execution Summary ===" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -d "screenshots" ]; then
+            screenshot_count=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
+            echo "- **Screenshots Generated**: $screenshot_count" >> $GITHUB_STEP_SUMMARY
+            echo "  Screenshots: $screenshot_count"
+            
+            if [ $screenshot_count -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Screenshots List:" >> $GITHUB_STEP_SUMMARY
+              for file in screenshots/*.png; do
+                if [ -f "$file" ]; then
+                  filename=$(basename "$file")
+                  filesize=$(du -h "$file" | cut -f1)
+                  echo "- 📸 $filename ($filesize)" >> $GITHUB_STEP_SUMMARY
+                fi
+              done
+            fi
+          else
+            echo "- **Screenshots**: No directory found ❌" >> $GITHUB_STEP_SUMMARY
+            echo "  No screenshots directory"
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
+            report_file=$(ls DAMS_CBT_Report_*.html | head -1)
+            report_size=$(du -h "$report_file" | cut -f1)
+            echo "- **HTML Report**: Generated ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
+            echo "  HTML Report: Generated"
+          else
+            echo "- **HTML Report**: Not generated ❌" >> $GITHUB_STEP_SUMMARY
+            echo "  HTML Report: Not found"
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date)" >> $GITHUB_STEP_SUMMARY
+      
+      - name: 📊 Upload Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qr-screenshots-${{ github.run_id }}
+          path: screenshots/
+          retention-days: 30
+          if-no-files-found: warn
+      
+      - name: 📄 Upload HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-report-${{ github.run_id }}
+          path: DAMS_CBT_Report_*.html
+          retention-days: 30
+          if-no-files-found: warn
+      
+      - name: 📧 Send Email Notification
+        if: always() && vars.ENABLE_EMAIL_NOTIFICATIONS == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "DAMS CBT Automation - ${{ job.status }}"
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: DAMS Automation
+          body: |
+            Automation execution completed with status: ${{ job.status }}
+            
+            Run ID: ${{ github.run_id }}
+            Run Description: ${{ github.event.inputs.run_description }}
+            Triggered by: ${{ github.actor }}
+            Time: ${{ github.event.head_commit.timestamp }}
+            
+            View artifacts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          attachments: DAMS_CBT_Report_*.html
+        continue-on-error: true
+      
+      - name: 🐛 Debug Information
+        if: failure()
+        run: |
+          echo "=== Debug Information ==="
+          echo ""
+          echo "Working Directory:"
+          pwd
+          echo ""
+          echo "Directory Contents:"
+          ls -la
+          echo ""
+          echo "Screenshots Directory:"
+          ls -la screenshots/ || echo "No screenshots directory"
+          echo ""
+          echo "Compiled Classes:"
+          ls -la compiled/ || echo "No compiled directory"
+          echo ""
+          echo "Library JARs:"
+          ls -la lib/
+          echo ""
+          echo "Environment Variables:"
+          env | grep -E "CI|JAVA|PATH"
+
+  # Optional: Deploy reports to GitHub Pages
+  deploy-reports:
+    needs: automation
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: 📥 Download HTML Reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: html-report-*
+          merge-multiple: true
+          path: ./reports
+      
+      - name: 📥 Download Screenshots
+        uses: actions/download-artifact@v4
+        with:
+          pattern: qr-screenshots-*
+          merge-multiple: true
+          path: ./reports/screenshots
+      
+      - name: 🏗️ Create Index Page
+        run: |
+          cat > ./reports/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>DAMS CBT Automation Reports</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { 
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                min-height: 100vh; 
+                padding: 40px 20px; 
+              }
+              .container { max-width: 1200px; margin: 0 auto; }
+              .header { 
+                background: white; 
+                border-radius: 20px; 
+                padding: 40px; 
+                margin-bottom: 30px; 
+                box-shadow: 0 10px 40px rgba(0,0,0,0.1); 
+                text-align: center; 
+              }
+              .header h1 { 
+                color: #2d3748; 
+                font-size: 42px; 
+                font-weight: 700; 
+                margin-bottom: 10px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+              }
+              .report-list { 
+                background: white; 
+                padding: 40px; 
+                border-radius: 20px; 
+                box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+              }
+              .report-list h2 { color: #2d3748; margin-bottom: 20px; }
+              .report-item { 
+                padding: 15px; 
+                margin: 10px 0; 
+                background: #f7fafc; 
+                border-radius: 10px; 
+                transition: all 0.3s;
+              }
+              .report-item:hover { 
+                background: #e2e8f0; 
+                transform: translateX(5px);
+              }
+              a { 
+                color: #667eea; 
+                text-decoration: none; 
+                font-weight: 600; 
+                display: block;
+              }
+              a:hover { color: #764ba2; }
+              .timestamp { 
+                color: #718096; 
+                font-size: 14px; 
+                margin-top: 5px; 
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🎯 DAMS CBT Automation Reports</h1>
+                <p style="color: #718096; margin-top: 10px;">Comprehensive CBT Course Purchase Summary</p>
+              </div>
+              <div class="report-list">
+                <h2>📊 Available Reports:</h2>
+          EOF
+          
+          for file in ./reports/DAMS_CBT_Report_*.html; do
+            if [ -f "$file" ]; then
+              basename=$(basename "$file")
+              filesize=$(du -h "$file" | cut -f1)
+              timestamp=$(stat -c %y "$file" | cut -d' ' -f1,2 | cut -d'.' -f1)
+              
+              echo "<div class='report-item'>" >> ./reports/index.html
+              echo "  <a href='$basename'>📄 $basename</a>" >> ./reports/index.html
+              echo "  <div class='timestamp'>Size: $filesize | Generated: $timestamp</div>" >> ./reports/index.html
+              echo "</div>" >> ./reports/index.html
+            fi
+          done
+          
+          cat >> ./reports/index.html << 'EOF'
+              </div>
+            </div>
+          </body>
+          </html>
+          EOF
+          
+          echo "✓ Index page created"
+      
+      - name: 🚀 Deploy to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./reports
+      
+      - name: 🌐 Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
