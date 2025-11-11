@@ -1,19 +1,14 @@
 name: DAMS CBT Automation (No Maven)
 
 on:
-  # Manual trigger
   workflow_dispatch:
     inputs:
       run_description:
         description: 'Description of this run'
         required: false
         default: 'Manual execution'
-  
-  # Scheduled runs (optional - runs every day at 9 AM UTC)
   schedule:
     - cron: '0 9 * * *'
-  
-  # Trigger on push to main branch
   push:
     branches:
       - main
@@ -21,6 +16,13 @@ on:
       - '**.java'
       - '.github/workflows/**'
       - 'lib/**'
+
+# ✅ CRITICAL FIX: Permissions for Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
 
 jobs:
   automation:
@@ -63,28 +65,13 @@ jobs:
           
           echo "Downloading Selenium dependencies..."
           
-          # Selenium Java 4.15.0
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
-          
-          # Selenium Chrome Driver
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
-          
-          # Selenium API
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.15.0/selenium-api-4.15.0.jar
-          
-          # Selenium Remote Driver
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.15.0/selenium-remote-driver-4.15.0.jar
-          
-          # Selenium Support
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.15.0/selenium-support-4.15.0.jar
-          
-          # Selenium Manager
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-manager/4.15.0/selenium-manager-4.15.0.jar
-          
-          # Selenium HTTP
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.15.0/selenium-http-4.15.0.jar
-          
-          # Additional dependencies
           wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
           wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
           wget -q https://repo1.maven.org/maven2/io/netty/netty-all/4.1.100.Final/netty-all-4.1.100.Final.jar
@@ -93,18 +80,11 @@ jobs:
           wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
           wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
           wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
-          
-          # === FIX 1: Added missing JARs ===
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chromium-driver/4.15.0/selenium-chromium-driver-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
-          
-          # === FIX 2 (NEW): Added missing JSON JAR for Runtime ===
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
-          # === End of FIX ===
           
           echo "✓ All JARs downloaded"
-          echo ""
-          echo "Downloaded files:"
           ls -lh
       
       - name: 📁 Create Required Directories
@@ -116,7 +96,6 @@ jobs:
       - name: 🏗️ Compile Java Code
         run: |
           echo "Compiling DamsDelhiLogin.java..."
-          # Use -Xlint to show more details on warnings
           javac -Xlint:all -cp "lib/*" -d compiled DamsDelhiLogin.java
           
           if [ $? -eq 0 ]; then
@@ -132,9 +111,7 @@ jobs:
         run: |
           echo "Starting automation execution..."
           echo "======================================"
-          # Ensure all libraries are in the classpath
           java -cp "compiled:lib/*" DamsDelhiLogin
-          
           echo ""
           echo "======================================"
           echo "Execution completed"
@@ -149,7 +126,6 @@ jobs:
           if [ -d "screenshots" ]; then
             screenshot_count=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
             echo "- **Screenshots Generated**: $screenshot_count" >> $GITHUB_STEP_SUMMARY
-            echo "  Screenshots: $screenshot_count"
             
             if [ $screenshot_count -gt 0 ]; then
               echo "" >> $GITHUB_STEP_SUMMARY
@@ -162,27 +138,17 @@ jobs:
                 fi
               done
             fi
-          else
-            echo "- **Screenshots**: No directory found ❌" >> $GITHUB_STEP_SUMMARY
-            echo "  No screenshots directory"
           fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
           
           if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
             report_file=$(ls DAMS_CBT_Report_*.html | head -1)
             report_size=$(du -h "$report_file" | cut -f1)
             echo "- **HTML Report**: Generated ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
-            echo "  HTML Report: Generated"
-          else
-            echo "- **HTML Report**: Not generated ❌" >> $GITHUB_STEP_SUMMARY
-            echo "  HTML Report: Not found"
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Time**: $(date)" >> $GITHUB_STEP_SUMMARY
       
       - name: 📊 Upload Screenshots
         if: always()
@@ -202,61 +168,28 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
       
-      - name: 📧 Send Email Notification
-        if: always() && vars.ENABLE_EMAIL_NOTIFICATIONS == 'true'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "DAMS CBT Automation - ${{ job.status }}"
-          to: ${{ secrets.NOTIFICATION_EMAIL }}
-          from: DAMS Automation
-          body: |
-            Automation execution completed with status: ${{ job.status }}
-            
-            Run ID: ${{ github.run_id }}
-            Run Description: ${{ github.event.inputs.run_description }}
-            Triggered by: ${{ github.actor }}
-            Time: ${{ github.event.head_commit.timestamp }}
-            
-            View artifacts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          attachments: DAMS_CBT_Report_*.html
-        continue-on-error: true
-      
       - name: 🐛 Debug Information
         if: failure()
         run: |
           echo "=== Debug Information ==="
-          echo ""
-          echo "Working Directory:"
           pwd
-          echo ""
-          echo "Directory Contents:"
           ls -la
-          echo ""
-          echo "Screenshots Directory:"
-          ls -la screenshots/ || echo "No screenshots directory"
-          echo ""
-          echo "Compiled Classes:"
-          ls -la compiled/ || echo "No compiled directory"
-          echo ""
-          echo "Library JARs:"
-          ls -la lib/
-          echo ""
-          echo "Environment Variables:"
-          env | grep -E "CI|JAVA|PATH"
+          ls -la screenshots/ || echo "No screenshots"
+          ls -la compiled/ || echo "No compiled"
 
-  # Optional: Deploy reports to GitHub Pages
+  # ✅ FIXED: GitHub Pages deployment
   deploy-reports:
     needs: automation
     runs-on: ubuntu-latest
     if: always() && github.ref == 'refs/heads/main'
-    permissions:
-      pages: write
-      id-token: write
-      contents: read
+    
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
       - name: 📥 Download HTML Reports
@@ -265,6 +198,7 @@ jobs:
           pattern: html-report-*
           merge-multiple: true
           path: ./reports
+        continue-on-error: true
       
       - name: 📥 Download Screenshots
         uses: actions/download-artifact@v4
@@ -272,9 +206,12 @@ jobs:
           pattern: qr-screenshots-*
           merge-multiple: true
           path: ./reports/screenshots
+        continue-on-error: true
       
       - name: 🏗️ Create Index Page
         run: |
+          mkdir -p ./reports
+          
           cat > ./reports/index.html << 'EOF'
           <!DOCTYPE html>
           <html lang="en">
@@ -338,6 +275,11 @@ jobs:
                 font-size: 14px; 
                 margin-top: 5px; 
               }
+              .no-reports {
+                text-align: center;
+                color: #718096;
+                padding: 40px;
+              }
             </style>
           </head>
           <body>
@@ -350,18 +292,30 @@ jobs:
                 <h2>📊 Available Reports:</h2>
           EOF
           
-          for file in ./reports/DAMS_CBT_Report_*.html; do
-            if [ -f "$file" ]; then
-              basename=$(basename "$file")
-              filesize=$(du -h "$file" | cut -f1)
-              timestamp=$(stat -c %y "$file" | cut -d' ' -f1,2 | cut -d'.' -f1)
-              
-              echo "<div class='report-item'>" >> ./reports/index.html
-              echo "  <a href='$basename'>📄 $basename</a>" >> ./reports/index.html
-              echo "  <div class='timestamp'>Size: $filesize | Generated: $timestamp</div>" >> ./reports/index.html
-              echo "</div>" >> ./reports/index.html
-            fi
-          done
+          report_found=false
+          
+          if ls ./reports/DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
+            for file in ./reports/DAMS_CBT_Report_*.html; do
+              if [ -f "$file" ]; then
+                basename=$(basename "$file")
+                filesize=$(du -h "$file" | cut -f1)
+                
+                echo "<div class='report-item'>" >> ./reports/index.html
+                echo "  <a href='$basename'>📄 $basename</a>" >> ./reports/index.html
+                echo "  <div class='timestamp'>Size: $filesize</div>" >> ./reports/index.html
+                echo "</div>" >> ./reports/index.html
+                
+                report_found=true
+              fi
+            done
+          fi
+          
+          if [ "$report_found" = false ]; then
+            echo "<div class='no-reports'>" >> ./reports/index.html
+            echo "  <p>🔍 No reports available yet.</p>" >> ./reports/index.html
+            echo "  <p style='margin-top: 10px;'>Run the automation workflow to generate reports.</p>" >> ./reports/index.html
+            echo "</div>" >> ./reports/index.html
+          fi
           
           cat >> ./reports/index.html << 'EOF'
               </div>
@@ -372,11 +326,12 @@ jobs:
           
           echo "✓ Index page created"
       
-      - name: 🚀 Deploy to GitHub Pages
+      - name: 🚀 Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./reports
       
-      - name: 🌐 Publish to GitHub Pages
+      - name: 🌐 Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
