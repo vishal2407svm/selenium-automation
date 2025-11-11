@@ -15,9 +15,7 @@ on:
     paths:
       - '**.java'
       - '.github/workflows/**'
-      - 'lib/**'
 
-# ✅ CRITICAL FIX: Permissions for Pages deployment
 permissions:
   contents: read
   pages: write
@@ -54,38 +52,66 @@ jobs:
           echo ""
           echo "=== Java Version ==="
           java -version
-          echo ""
-          echo "=== ChromeDriver Location ==="
-          which chromedriver
           
-      - name: 📦 Download Selenium JARs
+      - name: 📦 Download Selenium JARs - COMPLETE SET
         run: |
           mkdir -p lib
           cd lib
           
-          echo "Downloading Selenium dependencies..."
+          echo "Downloading ALL required Selenium dependencies..."
           
+          # Core Selenium JARs
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.15.0/selenium-api-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chromium-driver/4.15.0/selenium-chromium-driver-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.15.0/selenium-remote-driver-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.15.0/selenium-support-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-manager/4.15.0/selenium-manager-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.15.0/selenium-http-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
+          
+          # CRITICAL: Missing dependency that caused the error
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.15.0/selenium-os-4.15.0.jar
+          
+          # Google dependencies
           wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
+          wget -q https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar
+          wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
+          
+          # HTTP and Networking
           wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
           wget -q https://repo1.maven.org/maven2/io/netty/netty-all/4.1.100.Final/netty-all-4.1.100.Final.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.2.1/httpclient5-5.2.1.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.2.1/httpcore5-5.2.1.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.2.1/httpcore5-h2-5.2.1.jar
+          
+          # Commons and Utilities
           wget -q https://repo1.maven.org/maven2/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/apache/commons/commons-exec/1.3/commons-exec-1.3.jar
-          wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
-          wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
-          wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chromium-driver/4.15.0/selenium-chromium-driver-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/commons-codec/commons-codec/1.16.0/commons-codec-1.16.0.jar
+          wget -q https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar
           
-          echo "✓ All JARs downloaded"
-          ls -lh
+          # Failsafe and Testing
+          wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
+          wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
+          
+          # Byte Buddy (for runtime code generation)
+          wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.9/byte-buddy-1.14.9.jar
+          
+          # SLF4J Logging
+          wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar
+          wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.9/slf4j-simple-2.0.9.jar
+          
+          echo ""
+          echo "✓ All JARs downloaded successfully!"
+          echo ""
+          echo "Total files:"
+          ls -1 | wc -l
+          echo ""
+          echo "Total size:"
+          du -sh .
           
       - name: 📁 Create Required Directories
         run: |
@@ -96,10 +122,13 @@ jobs:
       - name: 🏗️ Compile Java Code
         run: |
           echo "Compiling DamsDelhiLogin.java..."
-          javac -Xlint:all -cp "lib/*" -d compiled DamsDelhiLogin.java
+          javac -cp "lib/*" -d compiled DamsDelhiLogin.java
           
           if [ $? -eq 0 ]; then
             echo "✓ Compilation successful"
+            echo ""
+            echo "Compiled classes:"
+            ls -la compiled/
           else
             echo "✗ Compilation failed"
             exit 1
@@ -155,7 +184,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: qr-screenshots-${{ github.run_id }}
-          path: screenshots/CBT_QR_*.png
+          path: screenshots/
           retention-days: 30
           if-no-files-found: warn
           
@@ -168,28 +197,22 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           
-      # --- NEW STEP ADDED FOR DEBUGGING ---
-      - name: 🐛 Upload Debug Files
-        if: always() # Always run, even on failure
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-files-${{ github.run_id }}
-          path: |
-            screenshots/DEBUG_*.png
-            page_source_debug.html
-          retention-days: 7
-          if-no-files-found: warn
-
       - name: 🐛 Debug Information
         if: failure()
         run: |
           echo "=== Debug Information ==="
           pwd
           ls -la
+          echo ""
+          echo "Screenshots:"
           ls -la screenshots/ || echo "No screenshots"
+          echo ""
+          echo "Compiled:"
           ls -la compiled/ || echo "No compiled"
+          echo ""
+          echo "Libraries:"
+          ls -la lib/ | head -20
 
-  # ✅ FIXED: GitHub Pages deployment
   deploy-reports:
     needs: automation
     runs-on: ubuntu-latest
