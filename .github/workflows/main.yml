@@ -94,9 +94,12 @@ jobs:
           wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
           wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
           
-          # === FIX: Added missing JARs ===
+          # === FIX 1: Added missing JARs ===
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chromium-driver/4.15.0/selenium-chromium-driver-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
+          
+          # === FIX 2 (NEW): Added missing JSON JAR for Runtime ===
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
           # === End of FIX ===
           
           echo "✓ All JARs downloaded"
