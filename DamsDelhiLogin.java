@@ -248,292 +248,6 @@ public class DamsDelhiLogin {
             By[] cbtSelectors = {
                 By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
                 By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
-                By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
-            };
-            
-            for (By selector : cbtSelectors) {
-                try {
-                    List<WebElement> cbtElements = driver.findElements(selector);
-                    for (WebElement cbtElem : cbtElements) {
-                        if (cbtElem.isDisplayed() && cbtElem.getText().trim().equals("CBT")) {
-                            js.executeScript("arguments[0].click();", cbtElem);
-                            System.out.println("  ✓ Clicked: CBT button");
-                            cbtClicked = true;
-                            sleep(2);
-                            break;
-                        }
-                    }
-                    if (cbtClicked) break;
-                } catch (Exception e) {}
-            }
-            
-            if (!cbtClicked) {
-                System.out.println("  ✗ Failed to click CBT button");
-                return;
-            }
-            
-            try {
-                WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
-                js.executeScript("arguments[0].click();", okBtn);
-                System.out.println("  ✓ Clicked: OK Button (Red)");
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ✗ Failed OK button: " + e.getMessage());
-            }
-            
-        } catch (Exception e) {
-            System.out.println("  ⚠ Error returning to CBT section: " + e.getMessage());
-        }
-    }
-
-    private static void closePaymentWindow() {
-        try {
-            By[] closeSelectors = {
-                By.xpath("//span[contains(@class, 'ptm-cross') and @id='app-close-btn']"),
-                By.id("app-close-btn"),
-                By.xpath("//span[contains(@class, 'ptm-cross')]")
-            };
-            
-            for (By selector : closeSelectors) {
-                try {
-                    WebElement closeBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", closeBtn);
-                    System.out.println("  ✓ Closed payment window");
-                    sleep(8);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-            By[] skipSelectors = {
-                By.xpath("//button[contains(@class, 'ptm-feedback-btn') and contains(text(), 'Skip')]"),
-                By.xpath("//button[contains(text(), 'Skip')]")
-            };
-            
-            for (By selector : skipSelectors) {
-                try {
-                    WebElement skipBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", skipBtn);
-                    sleep(2);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-            By[] modalSelectors = {
-                By.xpath("//span[contains(@class, 'ant-modal-close-x')]"),
-                By.xpath("//button[contains(@class, 'ant-modal-close')]")
-            };
-            
-            for (By selector : modalSelectors) {
-                try {
-                    WebElement modalBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", modalBtn);
-                    sleep(2);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-        } catch (Exception e) {
-            System.out.println("  ⚠ Issue closing payment window: " + e.getMessage());
-        }
-    }
-
-    private static void clickElement(By locator, String name) {
-        try {
-            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
-            js.executeScript("arguments[0].scrollIntoView({block: 'center'});", elem);
-            sleep(1);
-            js.executeScript("arguments[0].click();", elem);
-            System.out.println("  ✓ Clicked: " + name);
-        } catch (Exception e) {
-            System.out.println("  ✗ Failed to click: " + name + " - " + e.getMessage());
-        }
-    }
-
-    private static void enterText(By locator, String text, String fieldName) {
-        try {
-            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
-            elem.clear();
-            elem.sendKeys(text);
-            System.out.println("  ✓ Entered: " + fieldName);
-        } catch (Exception e) {
-            System.out.println("  ✗ Failed to enter: " + fieldName);
-        }
-    }
-
-    private static void sleep(int seconds) {
-        try {
-            Thread.sleep(seconds * 1000L);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private static void copyFile(File source, File dest) throws Exception {
-        Files.copy(source.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    private static void takeDebugScreenshot(String name) {
-        try {
-            String timestamp = fileFormat.format(new Date());
-            String filename = "screenshots/DEBUG_" + name + "_" + timestamp + ".png";
-            File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-            copyFile(screenshot, new File(filename));
-            System.out.println("  📸 Debug screenshot saved: " + filename);
-        } catch (Exception e) {
-            System.out.println("  ✗ Failed to take debug screenshot: " + e.getMessage());
-        }
-    }
-
-    private static void generateDetailedReport() {
-        System.out.println("\nGenerating detailed HTML report...");
-        
-        try {
-            String timestamp = fileFormat.format(new Date());
-            String filename = "DAMS_CBT_Report_" + timestamp + ".html";
-            
-            StringBuilder html = new StringBuilder();
-            html.append("<!DOCTYPE html>\n<html>\n<head>\n");
-            html.append("<meta charset='UTF-8'>\n");
-            html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-            html.append("<title>DAMS CBT Automation Report</title>\n");
-            html.append("<style>\n");
-            html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
-            html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
-            html.append(".container { max-width: 1400px; margin: 0 auto; }\n");
-            
-            html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
-            html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
-            html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
-            
-            html.append(".summary { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
-            html.append(".summary h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
-            html.append(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }\n");
-            html.append(".stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }\n");
-            html.append(".stat-card .label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; }\n");
-            html.append(".stat-card .value { font-size: 48px; font-weight: 700; }\n");
-            html.append(".stat-card.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
-            html.append(".stat-card.failed { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }\n");
-            
-            html.append(".results { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow-x: auto; }\n");
-            html.append(".results h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
-            html.append("table { width: 100%; border-collapse: collapse; }\n");
-            html.append("thead { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }\n");
-            html.append("th { padding: 15px; text-align: left; font-weight: 600; }\n");
-            html.append("tbody tr { border-bottom: 1px solid #e2e8f0; transition: background 0.3s; }\n");
-            html.append("tbody tr:hover { background: #f7fafc; }\n");
-            html.append("td { padding: 15px; }\n");
-            html.append(".status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }\n");
-            html.append(".status-success { background: #c6f6d5; color: #22543d; }\n");
-            html.append(".status-failed { background: #fed7d7; color: #742a2a; }\n");
-            html.append(".screenshot-link { color: #667eea; text-decoration: none; font-weight: 600; }\n");
-            html.append(".screenshot-link:hover { text-decoration: underline; }\n");
-            html.append(".error-msg { color: #e53e3e; font-size: 12px; font-style: italic; }\n");
-            
-            html.append(".footer { text-align: center; color: white; margin-top: 40px; padding: 20px; }\n");
-            
-            html.append("@media (max-width: 768px) {\n");
-            html.append("  .header h1 { font-size: 32px; }\n");
-            html.append("  .summary, .results { padding: 25px 20px; }\n");
-            html.append("  table { font-size: 14px; }\n");
-            html.append("  th, td { padding: 10px; }\n");
-            html.append("}\n");
-            
-            html.append("</style>\n</head>\n<body>\n");
-            html.append("<div class='container'>\n");
-            
-            html.append("<div class='header'>\n");
-            html.append("<h1>🎯 DAMS CBT Automation Report</h1>\n");
-            html.append("<p class='subtitle'>Comprehensive CBT Course Purchase Summary</p>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='summary'>\n");
-            html.append("<h2>📊 Execution Summary</h2>\n");
-            html.append("<div class='stats-grid'>\n");
-            
-            html.append("<div class='stat-card'>\n");
-            html.append("<div class='label'>Total Courses Attempted</div>\n");
-            html.append("<div class='value'>").append(courseResults.size()).append("</div>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='stat-card success'>\n");
-            html.append("<div class='label'>Successful Purchases</div>\n");
-            html.append("<div class='value'>").append(totalSuccessful).append("</div>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='stat-card failed'>\n");
-            html.append("<div class='label'>Failed Attempts</div>\n");
-            html.append("<div class='value'>").append(totalFailed).append("</div>\n");
-            html.append("</div>\n");
-            
-            html.append("</div>\n");
-            html.append("<p style='margin-top: 20px; color: #4a5568;'><strong>Execution Time:</strong> " + executionStartTime + "</p>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='results'>\n");
-            html.append("<h2>📋 Detailed Results</h2>\n");
-            html.append("<table>\n");
-            html.append("<thead>\n");
-            html.append("<tr>\n");
-            html.append("<th>#</th>\n");
-            html.append("<th>Course Name</th>\n");
-            html.append("<th>Status</th>\n");
-            html.append("<th>Time</th>\n");
-            html.append("<th>Screenshot</th>\n");
-            html.append("<th>Error</th>\n");
-            html.append("</tr>\n");
-            html.append("</thead>\n");
-            html.append("<tbody>\n");
-            
-            for (int i = 0; i < courseResults.size(); i++) {
-                CourseResult result = courseResults.get(i);
-                html.append("<tr>\n");
-                html.append("<td>").append(i + 1).append("</td>\n");
-                html.append("<td>").append(result.courseName).append("</td>\n");
-                
-                String statusClass = result.status.equals("SUCCESS") ? "status-success" : "status-failed";
-                html.append("<td><span class='status-badge ").append(statusClass).append("'>").append(result.status).append("</span></td>\n");
-                
-                html.append("<td>").append(result.timestamp).append("</td>\n");
-                
-                if (result.screenshotPath != null) {
-                    html.append("<td><a href='").append(result.screenshotPath).append("' class='screenshot-link' target='_blank'>View QR</a></td>\n");
-                } else {
-                    html.append("<td>-</td>\n");
-                }
-                
-                if (result.errorMessage != null) {
-                    html.append("<td><span class='error-msg'>").append(result.errorMessage).append("</span></td>\n");
-                } else {
-                    html.append("<td>-</td>\n");
-                }
-                
-                html.append("</tr>\n");
-            }
-            
-            html.append("</tbody>\n");
-            html.append("</table>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='footer'>\n");
-            html.append("<p>Generated by DAMS CBT Automation System | Powered by Selenium WebDriver</p>\n");
-            html.append("</div>\n");
-            
-            html.append("</div>\n");
-            html.append("</body>\n</html>");
-            
-            FileWriter writer = new FileWriter(filename);
-            writer.write(html.toString());
-            writer.close();
-            
-            System.out.println("✓ Detailed report saved: " + filename);
-            
-        } catch (Exception e) {
-            System.out.println("✗ Report generation failed: " + e.getMessage());
-        }
-    }
-}(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
-                By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
                 By.xpath("//button[contains(., 'CBT')]"),
                 By.xpath("//*[@role='button' and contains(., 'CBT')]"),
                 By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
@@ -956,4 +670,290 @@ public class DamsDelhiLogin {
             
             boolean cbtClicked = false;
             By[] cbtSelectors = {
-                By.xpath("//div[contains
+                By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
+                By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
+                By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
+            };
+            
+            for (By selector : cbtSelectors) {
+                try {
+                    List<WebElement> cbtElements = driver.findElements(selector);
+                    for (WebElement cbtElem : cbtElements) {
+                        if (cbtElem.isDisplayed() && cbtElem.getText().trim().equals("CBT")) {
+                            js.executeScript("arguments[0].click();", cbtElem);
+                            System.out.println("  ✓ Clicked: CBT button");
+                            cbtClicked = true;
+                            sleep(2);
+                            break;
+                        }
+                    }
+                    if (cbtClicked) break;
+                } catch (Exception e) {}
+            }
+            
+            if (!cbtClicked) {
+                System.out.println("  ✗ Failed to click CBT button");
+                return;
+            }
+            
+            try {
+                WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
+                js.executeScript("arguments[0].click();", okBtn);
+                System.out.println("  ✓ Clicked: OK Button (Red)");
+                sleep(3);
+            } catch (Exception e) {
+                System.out.println("  ✗ Failed OK button: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {
+            System.out.println("  ⚠ Error returning to CBT section: " + e.getMessage());
+        }
+    }
+
+    private static void closePaymentWindow() {
+        try {
+            By[] closeSelectors = {
+                By.xpath("//span[contains(@class, 'ptm-cross') and @id='app-close-btn']"),
+                By.id("app-close-btn"),
+                By.xpath("//span[contains(@class, 'ptm-cross')]")
+            };
+            
+            for (By selector : closeSelectors) {
+                try {
+                    WebElement closeBtn = driver.findElement(selector);
+                    js.executeScript("arguments[0].click();", closeBtn);
+                    System.out.println("  ✓ Closed payment window");
+                    sleep(8);
+                    break;
+                } catch (Exception e) {}
+            }
+            
+            By[] skipSelectors = {
+                By.xpath("//button[contains(@class, 'ptm-feedback-btn') and contains(text(), 'Skip')]"),
+                By.xpath("//button[contains(text(), 'Skip')]")
+            };
+            
+            for (By selector : skipSelectors) {
+                try {
+                    WebElement skipBtn = driver.findElement(selector);
+                    js.executeScript("arguments[0].click();", skipBtn);
+                    sleep(2);
+                    break;
+                } catch (Exception e) {}
+            }
+            
+            By[] modalSelectors = {
+                By.xpath("//span[contains(@class, 'ant-modal-close-x')]"),
+                By.xpath("//button[contains(@class, 'ant-modal-close')]")
+            };
+            
+            for (By selector : modalSelectors) {
+                try {
+                    WebElement modalBtn = driver.findElement(selector);
+                    js.executeScript("arguments[0].click();", modalBtn);
+                    sleep(2);
+                    break;
+                } catch (Exception e) {}
+            }
+            
+        } catch (Exception e) {
+            System.out.println("  ⚠ Issue closing payment window: " + e.getMessage());
+        }
+    }
+
+    private static void clickElement(By locator, String name) {
+        try {
+            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+            js.executeScript("arguments[0].scrollIntoView({block: 'center'});", elem);
+            sleep(1);
+            js.executeScript("arguments[0].click();", elem);
+            System.out.println("  ✓ Clicked: " + name);
+        } catch (Exception e) {
+            System.out.println("  ✗ Failed to click: " + name + " - " + e.getMessage());
+        }
+    }
+
+    private static void enterText(By locator, String text, String fieldName) {
+        try {
+            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+            elem.clear();
+            elem.sendKeys(text);
+            System.out.println("  ✓ Entered: " + fieldName);
+        } catch (Exception e) {
+            System.out.println("  ✗ Failed to enter: " + fieldName);
+        }
+    }
+
+    private static void sleep(int seconds) {
+        try {
+            Thread.sleep(seconds * 1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static void copyFile(File source, File dest) throws Exception {
+        Files.copy(source.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static void takeDebugScreenshot(String name) {
+        try {
+            String timestamp = fileFormat.format(new Date());
+            String filename = "screenshots/DEBUG_" + name + "_" + timestamp + ".png";
+            File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+            copyFile(screenshot, new File(filename));
+            System.out.println("  📸 Debug screenshot saved: " + filename);
+        } catch (Exception e) {
+            System.out.println("  ✗ Failed to take debug screenshot: " + e.getMessage());
+        }
+    }
+
+    private static void generateDetailedReport() {
+        System.out.println("\nGenerating detailed HTML report...");
+        
+        try {
+            String timestamp = fileFormat.format(new Date());
+            String filename = "DAMS_CBT_Report_" + timestamp + ".html";
+            
+            StringBuilder html = new StringBuilder();
+            html.append("<!DOCTYPE html>\n<html>\n<head>\n");
+            html.append("<meta charset='UTF-8'>\n");
+            html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
+            html.append("<title>DAMS CBT Automation Report</title>\n");
+            html.append("<style>\n");
+            html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
+            html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
+            html.append(".container { max-width: 1400px; margin: 0 auto; }\n");
+            
+            html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
+            html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
+            html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
+            
+            html.append(".summary { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
+            html.append(".summary h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
+            html.append(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }\n");
+            html.append(".stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }\n");
+            html.append(".stat-card .label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; }\n");
+            html.append(".stat-card .value { font-size: 48px; font-weight: 700; }\n");
+            html.append(".stat-card.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
+            html.append(".stat-card.failed { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }\n");
+            
+            html.append(".results { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow-x: auto; }\n");
+            html.append(".results h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
+            html.append("table { width: 100%; border-collapse: collapse; }\n");
+            html.append("thead { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }\n");
+            html.append("th { padding: 15px; text-align: left; font-weight: 600; }\n");
+            html.append("tbody tr { border-bottom: 1px solid #e2e8f0; transition: background 0.3s; }\n");
+            html.append("tbody tr:hover { background: #f7fafc; }\n");
+            html.append("td { padding: 15px; }\n");
+            html.append(".status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }\n");
+            html.append(".status-success { background: #c6f6d5; color: #22543d; }\n");
+            html.append(".status-failed { background: #fed7d7; color: #742a2a; }\n");
+            html.append(".screenshot-link { color: #667eea; text-decoration: none; font-weight: 600; }\n");
+            html.append(".screenshot-link:hover { text-decoration: underline; }\n");
+            html.append(".error-msg { color: #e53e3e; font-size: 12px; font-style: italic; }\n");
+            
+            html.append(".footer { text-align: center; color: white; margin-top: 40px; padding: 20px; }\n");
+            
+            html.append("@media (max-width: 768px) {\n");
+            html.append("  .header h1 { font-size: 32px; }\n");
+            html.append("  .summary, .results { padding: 25px 20px; }\n");
+            html.append("  table { font-size: 14px; }\n");
+            html.append("  th, td { padding: 10px; }\n");
+            html.append("}\n");
+            
+            html.append("</style>\n</head>\n<body>\n");
+            html.append("<div class='container'>\n");
+            
+            html.append("<div class='header'>\n");
+            html.append("<h1>🎯 DAMS CBT Automation Report</h1>\n");
+            html.append("<p class='subtitle'>Comprehensive CBT Course Purchase Summary</p>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='summary'>\n");
+            html.append("<h2>📊 Execution Summary</h2>\n");
+            html.append("<div class='stats-grid'>\n");
+            
+            html.append("<div class='stat-card'>\n");
+            html.append("<div class='label'>Total Courses Attempted</div>\n");
+            html.append("<div class='value'>").append(courseResults.size()).append("</div>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='stat-card success'>\n");
+            html.append("<div class='label'>Successful Purchases</div>\n");
+            html.append("<div class='value'>").append(totalSuccessful).append("</div>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='stat-card failed'>\n");
+            html.append("<div class='label'>Failed Attempts</div>\n");
+            html.append("<div class='value'>").append(totalFailed).append("</div>\n");
+            html.append("</div>\n");
+            
+            html.append("</div>\n");
+            html.append("<p style='margin-top: 20px; color: #4a5568;'><strong>Execution Time:</strong> " + executionStartTime + "</p>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='results'>\n");
+            html.append("<h2>📋 Detailed Results</h2>\n");
+            html.append("<table>\n");
+            html.append("<thead>\n");
+            html.append("<tr>\n");
+            html.append("<th>#</th>\n");
+            html.append("<th>Course Name</th>\n");
+            html.append("<th>Status</th>\n");
+            html.append("<th>Time</th>\n");
+            html.append("<th>Screenshot</th>\n");
+            html.append("<th>Error</th>\n");
+            html.append("</tr>\n");
+            html.append("</thead>\n");
+            html.append("<tbody>\n");
+            
+            for (int i = 0; i < courseResults.size(); i++) {
+                CourseResult result = courseResults.get(i);
+                html.append("<tr>\n");
+                html.append("<td>").append(i + 1).append("</td>\n");
+                html.append("<td>").append(result.courseName).append("</td>\n");
+                
+                String statusClass = result.status.equals("SUCCESS") ? "status-success" : "status-failed";
+                html.append("<td><span class='status-badge ").append(statusClass).append("'>").append(result.status).append("</span></td>\n");
+                
+                html.append("<td>").append(result.timestamp).append("</td>\n");
+                
+                if (result.screenshotPath != null) {
+                    html.append("<td><a href='").append(result.screenshotPath).append("' class='screenshot-link' target='_blank'>View QR</a></td>\n");
+                } else {
+                    html.append("<td>-</td>\n");
+                }
+                
+                if (result.errorMessage != null) {
+                    html.append("<td><span class='error-msg'>").append(result.errorMessage).append("</span></td>\n");
+                } else {
+                    html.append("<td>-</td>\n");
+                }
+                
+                html.append("</tr>\n");
+            }
+            
+            html.append("</tbody>\n");
+            html.append("</table>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='footer'>\n");
+            html.append("<p>Generated by DAMS CBT Automation System | Powered by Selenium WebDriver</p>\n");
+            html.append("</div>\n");
+            
+            html.append("</div>\n");
+            html.append("</body>\n</html>");
+            
+            FileWriter writer = new FileWriter(filename);
+            writer.write(html.toString());
+            writer.close();
+            
+            System.out.println("✓ Detailed report saved: " + filename);
+            
+        } catch (Exception e) {
+            System.out.println("✗ Report generation failed: " + e.getMessage());
+        }
+    }
+}
