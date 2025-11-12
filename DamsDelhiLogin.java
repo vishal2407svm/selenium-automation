@@ -26,12 +26,6 @@ public class DamsDelhiLogin {
     private static SimpleDateFormat fileFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
     private static String executionStartTime;
     
-    // Increased default timeout to 30 seconds for reliability in CI
-    private static final Duration DEFAULT_WAIT_TIMEOUT = Duration.ofSeconds(30);
-    // Increased QR code wait to 90 seconds, as payment gateways can be slow
-    private static final Duration QR_CODE_WAIT_TIMEOUT = Duration.ofSeconds(90);
-
-
     static class CourseResult {
         String courseName;
         String status;
@@ -59,24 +53,18 @@ public class DamsDelhiLogin {
 
             setupDriver();
             login();
-            
-            takeDebugScreenshot("1_AfterLogin");
 
+            // Navigate to CBT section using hamburger menu
             navigateToCBTSectionViaHamburger();
-            
-            takeDebugScreenshot("2_AfterNavigatingToCBT");
 
+            // Discover all CBT courses
             List<String> cbtCourses = discoverCBTCourses();
             System.out.println("\n✓ Found " + cbtCourses.size() + " CBT courses");
             for (int i = 0; i < cbtCourses.size(); i++) {
                 System.out.println("  [" + (i + 1) + "] " + cbtCourses.get(i));
             }
 
-            if (cbtCourses.isEmpty()) {
-                System.out.println("\n⚠️ WARNING: No CBT courses found! Check debug screenshots.");
-                // Debug screenshot already taken in discoverCBTCourses
-            }
-
+            // Process each CBT course
             for (int i = 0; i < cbtCourses.size(); i++) {
                 String courseName = cbtCourses.get(i);
                 System.out.println("\n" + "=".repeat(60));
@@ -85,6 +73,7 @@ public class DamsDelhiLogin {
 
                 processCBTCourse(courseName, i);
                 
+                // Return to CBT section after each course (except last)
                 if (i < cbtCourses.size() - 1) {
                     returnToCBTSection();
                 }
@@ -92,18 +81,17 @@ public class DamsDelhiLogin {
 
             System.out.println("\n╔════════════════════════════════════════════╗");
             System.out.println("║  EXECUTION COMPLETED!                      ║");
-            System.out.printf("║  Successful: %-2d                          ║%n", totalSuccessful);
-            System.out.printf("║  Failed: %-2d                              ║%n", totalFailed);
+            System.out.println("║  Successful: " + totalSuccessful + "                              ║");
+            System.out.println("║  Failed: " + totalFailed + "                                  ║");
             System.out.println("╚════════════════════════════════════════════╝");
 
         } catch (Exception e) {
             System.out.println("CRITICAL ERROR: " + e.getMessage());
             e.printStackTrace();
-            takeDebugScreenshot("critical_error");
         } finally {
             generateDetailedReport();
-            System.out.println("\nClosing in 5 seconds..."); // Shortened sleep
-            sleep(5);
+            System.out.println("\nClosing in 10 seconds...");
+            sleep(10);
             if (driver != null) {
                 driver.quit();
             }
@@ -118,28 +106,22 @@ public class DamsDelhiLogin {
         options.addArguments("--disable-blink-features=AutomationControlled");
         options.addArguments("--disable-notifications");
         
+        // Check if running in CI mode
         String ciMode = System.getenv("CI");
         if ("true".equals(ciMode)) {
-            System.out.println("🤖 Running in CI mode (headless)");
+            System.out.println("Running in CI mode (headless)");
             options.addArguments("--headless=new");
             options.addArguments("--no-sandbox");
             options.addArguments("--disable-dev-shm-usage");
             options.addArguments("--disable-gpu");
             options.addArguments("--window-size=1920,1080");
-            options.addArguments("--disable-web-security");
-            options.addArguments("--allow-running-insecure-content");
         } else {
-            System.out.println("🖥️ Running in normal mode (with browser)");
             options.addArguments("--start-maximized");
         }
         
         driver = new ChromeDriver(options);
-        if (!"true".equals(ciMode)) {
-            driver.manage().window().maximize();
-        }
-        
-        // Initialize wait with default timeout
-        wait = new WebDriverWait(driver, DEFAULT_WAIT_TIMEOUT);
+        driver.manage().window().maximize();
+        wait = new WebDriverWait(driver, Duration.ofSeconds(30));
         js = (JavascriptExecutor) driver;
         
         System.out.println("✓ Driver ready\n");
@@ -149,92 +131,73 @@ public class DamsDelhiLogin {
         System.out.println("Starting login...");
         
         driver.get("https://www.damsdelhi.com/");
+        sleep(3);
         
-        // Replaced sleep(3) with explicit wait
+        // Click Sign in button
         try {
-            WebElement signInBtn = wait.until(ExpectedConditions.elementToBeClickable(
+            WebElement signInBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                 By.xpath("//button[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
             js.executeScript("arguments[0].click();", signInBtn);
             System.out.println("  ✓ Clicked: Sign In button");
+            sleep(3);
         } catch (Exception e) {
             try {
-                WebElement signInBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                WebElement signInBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//a[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
                 js.executeScript("arguments[0].click();", signInBtn);
                 System.out.println("  ✓ Clicked: Sign In link");
+                sleep(3);
             } catch (Exception e2) {
                 System.out.println("  ✗ Could not find sign in element");
-                takeDebugScreenshot("login_failed_no_signin_btn");
-                throw e2; // Fail fast
             }
         }
         
-        // Wait for phone input to be visible
         enterText(By.xpath("//input[@type='tel' or @type='number' or contains(@placeholder, 'number')]"), 
                   "+919456628016", "Phone");
+        sleep(2);
         
         clickElement(By.className("common-bottom-btn"), "Request OTP");
+        sleep(3);
         
-        // Wait for OTP input to be visible instead of sleeping
-        try {
-            wait.until(ExpectedConditions.visibilityOfElementLocated(
-                By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]")));
-        } catch (Exception e) {
-            System.out.println("  ℹ OTP input not found, checking for logout popup...");
-        }
-
         // Handle logout popup
         try {
-            // Shortened wait for optional element
-            WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(3));
-            WebElement logoutBtn = shortWait.until(ExpectedConditions.elementToBeClickable(
-                By.xpath("//button[contains(@class, 'btndata') and contains(text(), 'Logout')]")));
+            WebElement logoutBtn = driver.findElement(
+                By.xpath("//button[contains(@class, 'btndata') and contains(text(), 'Logout')]"));
             js.executeScript("arguments[0].click();", logoutBtn);
             System.out.println("  ✓ Clicked Logout popup");
-            // Wait for OTP input to appear *after* closing popup
-            wait.until(ExpectedConditions.visibilityOfElementLocated(
-                By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]")));
+            sleep(3);
         } catch (Exception e) {
             System.out.println("  ℹ No logout popup");
         }
         
         enterText(By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]"), 
                   "2000", "OTP");
+        sleep(2);
         
         clickElement(By.className("common-bottom-btn"), "Submit OTP");
+        sleep(5);
         
-        // Replaced sleep(5) with wait for hamburger icon, proving login
-        try {
-            wait.until(ExpectedConditions.presenceOfElementLocated(By.className("humburgerIcon")));
-            System.out.println("✓ Login successful (hamburger icon found)\n");
-        } catch (Exception e) {
-            System.out.println("  ⚠ Login might have failed, hamburger icon not found.");
-            takeDebugScreenshot("login_failed_no_hamburger");
-        }
+        System.out.println("✓ Login successful\n");
     }
 
     private static void navigateToCBTSectionViaHamburger() {
         System.out.println("Navigating to CBT section via Hamburger menu...");
         
         try {
-            // Step 1: Click the course dropdown button (Optional)
+            // Step 1: Click the course dropdown button to select NEET PG
             try {
-                // Use a shorter wait for optional elements
-                WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(5));
-                WebElement dropdown = shortWait.until(ExpectedConditions.elementToBeClickable(
+                WebElement dropdown = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[contains(@class, 'SelectCat')]")));
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", dropdown);
+                sleep(1);
                 js.executeScript("arguments[0].click();", dropdown);
                 System.out.println("  ✓ Clicked: Course Dropdown");
-                
-                // Wait for dropdown options to appear
-                wait.until(ExpectedConditions.visibilityOfElementLocated(
-                    By.xpath("//span[contains(text(), 'NEET PG')] | //div[contains(text(), 'NEET PG')]")));
+                sleep(3);
             } catch (Exception e) {
-                System.out.println("  ⚠ Skipping dropdown (maybe already selected or not present)");
+                System.out.println("  ⚠ Skipping dropdown: " + e.getMessage());
             }
             
-            // Step 2: Select NEET PG from dropdown (Optional)
+            // Step 2: Select NEET PG from dropdown
             try {
                 List<WebElement> options = driver.findElements(
                     By.xpath("//span[contains(text(), 'NEET PG')] | //div[contains(text(), 'NEET PG')]"));
@@ -242,11 +205,7 @@ public class DamsDelhiLogin {
                     if (option.isDisplayed()) {
                         js.executeScript("arguments[0].click();", option);
                         System.out.println("  ✓ Selected: NEET PG");
-                        // Wait for modal or hamburger to be clickable after selection
-                        wait.until(ExpectedConditions.or(
-                            ExpectedConditions.elementToBeClickable(By.className("humburgerIcon")),
-                            ExpectedConditions.elementToBeClickable(By.xpath("//button[@type='button' and @aria-label='Close']"))
-                        ));
+                        sleep(3);
                         break;
                     }
                 }
@@ -254,72 +213,88 @@ public class DamsDelhiLogin {
                 System.out.println("  ⚠ Skipping NEET PG selection");
             }
             
-            // Step 3: Close any modal if present (Optional)
+            // Step 3: Close any modal if present
             try {
-                WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(5));
-                WebElement closeBtn = shortWait.until(ExpectedConditions.elementToBeClickable(
-                    By.xpath("//button[@type='button' and @aria-label='Close'] | //span[contains(@class, 'ant-modal-close')]")));
+                WebElement closeBtn = driver.findElement(
+                    By.xpath("//button[@type='button' and @aria-label='Close'] | //span[contains(@class, 'ant-modal-close')]"));
                 js.executeScript("arguments[0].click();", closeBtn);
                 System.out.println("  ✓ Closed modal");
+                sleep(2);
             } catch (Exception e) {
                 System.out.println("  ℹ No modal to close");
             }
             
             // Step 4: Click Hamburger menu button
-            WebElement hamburger = wait.until(ExpectedConditions.elementToBeClickable(
-                By.className("humburgerIcon")));
-            js.executeScript("arguments[0].scrollIntoView({block: 'center'});", hamburger);
-            js.executeScript("arguments[0].click();", hamburger);
-            System.out.println("  ✓ Clicked: Hamburger Menu");
+            boolean hamburgerClicked = false;
+            try {
+                WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.className("humburgerIcon")));
+                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", hamburger);
+                sleep(1);
+                js.executeScript("arguments[0].click();", hamburger);
+                System.out.println("  ✓ Clicked: Hamburger Menu");
+                hamburgerClicked = true;
+                sleep(3);
+            } catch (Exception e) {
+                System.out.println("  ✗ Failed to click hamburger: " + e.getMessage());
+            }
+            
+            if (!hamburgerClicked) {
+                System.out.println("  ✗ Could not open hamburger menu!");
+                return;
+            }
             
             // Step 5: Click CBT button in the sidebar
-            // Wait for sidebar to be visible
-            wait.until(ExpectedConditions.visibilityOfElementLocated(
-                By.xpath("//div[contains(@class, 'Categories')]")));
-                
+            boolean cbtClicked = false;
+            
             By[] cbtSelectors = {
                 By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
                 By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
                 By.xpath("//button[contains(., 'CBT')]"),
+                By.xpath("//*[@role='button' and contains(., 'CBT')]"),
                 By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
             };
             
-            WebElement cbtElem = null;
             for (By selector : cbtSelectors) {
                 try {
                     List<WebElement> cbtElements = driver.findElements(selector);
-                    for (WebElement elem : cbtElements) {
-                        if (elem.isDisplayed() && (elem.getText().trim().equals("CBT") || elem.getText().trim().equalsIgnoreCase("cbt"))) {
-                            cbtElem = elem;
-                            break;
+                    for (WebElement cbtElem : cbtElements) {
+                        if (cbtElem.isDisplayed()) {
+                            String elemText = cbtElem.getText().trim();
+                            
+                            if (elemText.equals("CBT") || elemText.equalsIgnoreCase("cbt")) {
+                                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", cbtElem);
+                                sleep(1);
+                                js.executeScript("arguments[0].click();", cbtElem);
+                                System.out.println("  ✓ Clicked: CBT button");
+                                cbtClicked = true;
+                                sleep(3);
+                                break;
+                            }
                         }
                     }
-                    if (cbtElem != null) break;
-                } catch (Exception e) {}
+                    if (cbtClicked) break;
+                } catch (Exception e) {
+                    System.out.println("    Trying next selector...");
+                }
             }
             
-            if (cbtElem != null) {
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", cbtElem);
-                js.executeScript("arguments[0].click();", cbtElem);
-                System.out.println("  ✓ Clicked: CBT button");
-            } else {
+            if (!cbtClicked) {
                 System.out.println("  ✗ Could not click CBT button!");
-                takeDebugScreenshot("cbt_button_not_found");
-                return; // Exit method
+                return;
             }
             
             // Step 6: Click OK button (Red button) if it appears
             try {
-                // Wait for OK button to be clickable
-                WebElement okBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", okBtn);
+                sleep(1);
                 js.executeScript("arguments[0].click();", okBtn);
                 System.out.println("  ✓ Clicked: OK Button (Red)");
-                // Wait for page to reload by waiting for *any* course card (div with 'col' and a button)
-                wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//div[contains(@class, 'col') and .//button]")));
+                sleep(3);
             } catch (Exception e) {
-                System.out.println("  ℹ No OK button to click (may not be needed)");
+                System.out.println("  ℹ No OK button to click");
             }
             
             System.out.println("✓ Successfully navigated to CBT section\n");
@@ -327,7 +302,6 @@ public class DamsDelhiLogin {
         } catch (Exception e) {
             System.out.println("✗ Error navigating to CBT section: " + e.getMessage());
             e.printStackTrace();
-            takeDebugScreenshot("navigation_error");
         }
     }
 
@@ -336,37 +310,21 @@ public class DamsDelhiLogin {
         List<String> courses = new ArrayList<>();
         
         try {
-            System.out.println("  → Current URL: " + driver.getCurrentUrl());
+            // CRITICAL FIX: Wait for page to fully load after navigation
+            System.out.println("  → Waiting for CBT page to load completely...");
+            sleep(5); // Give time for JavaScript to render
             
-            // --- MAJOR FIX ---
-            // Replaced sleep(5) with a robust wait for the *first course card container* to appear.
-            // This is more reliable than waiting for a specific button class.
-            // We define a "course card" as a div with class 'col' that contains a button.
-            By firstCourseCardSelector = By.xpath("//div[contains(@class, 'col') and .//button]");
-            try {
-                System.out.println("  → Waiting up to 30s for first course card to load...");
-                wait.until(ExpectedConditions.presenceOfElementLocated(firstCourseCardSelector));
-                System.out.println("  ✓ Course card (or at least one) is present.");
-            } catch (Exception e) {
-                System.out.println("  ✗ CRITICAL: Waited 30s but no 'course card' (div with class 'col' and a button) found.");
-                System.out.println("  → This is why 0 courses are being found.");
-                takeDebugScreenshot("3_NoCourseCardsFoundAfterWait");
-                savePageSource();
-                return courses; // Return empty list
-            }
-            // --- END OF FIX ---
-            
+            // Scroll to load all courses
             js.executeScript("window.scrollTo(0, 0);");
-            sleep(1); // Short sleep after scroll
+            sleep(2);
             
             long lastHeight = (Long) js.executeScript("return document.body.scrollHeight");
             int stableCount = 0;
-            int scrollAttempts = 0;
             
-            System.out.println("  → Starting scrolling to load all courses...");
-            while (stableCount < 3 && scrollAttempts < 15) {
-                js.executeScript("window.scrollBy(0, 800);");
-                sleep(2); // Short sleep during scroll
+            System.out.println("  → Scrolling to load all courses...");
+            while (stableCount < 3) {
+                js.executeScript("window.scrollBy(0, 500);");
+                sleep(1);
                 long newHeight = (Long) js.executeScript("return document.body.scrollHeight");
                 if (newHeight == lastHeight) {
                     stableCount++;
@@ -374,123 +332,117 @@ public class DamsDelhiLogin {
                     stableCount = 0;
                     lastHeight = newHeight;
                 }
-                scrollAttempts++;
-                System.out.println("    Scroll attempt " + scrollAttempts + " (height: " + newHeight + ")");
             }
-            
-            System.out.println("  → Scrolled " + scrollAttempts + " times to load all content");
             
             js.executeScript("window.scrollTo(0, 0);");
-            sleep(2); // Short sleep
+            sleep(2);
             
-            takeDebugScreenshot("3_BeforeFindingButtons");
+            // Find all Buy Now buttons - use the EXACT working selector
+            List<WebElement> buyNowButtons = driver.findElements(
+                By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
             
-            List<WebElement> buyNowButtons = new ArrayList<>();
-            // FIXED: Added more generic selectors. We will try these one by one.
-            By[] buttonSelectors = {
-                // 1. Original specific selector
-                By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"),
-                // 2. Original generic 'butBtn'
-                By.xpath("//button[contains(@class, 'butBtn')]"),
-                // 3. NEW: Generic "Buy Now" text search (more robust)
-                By.xpath("//div[contains(@class, 'col')]//button[contains(normalize-space(), 'Buy Now')]"),
-                // 4. NEW: Any button inside a 'col' div that *doesn't* say "View" or "Details"
-                By.xpath("//div[contains(@class, 'col')]//button[not(contains(., 'View')) and not(contains(., 'Details'))]"),
-                // 5. Original: Any button text containing "Buy"
-                By.xpath("//button[contains(text(), 'Buy') or contains(text(), 'buy')]"),
-                // 6. Original: Any button inside a 'col'
-                By.xpath("//div[contains(@class, 'col')]//button[@type='button']")
-            };
-
-            for (int i = 0; i < buttonSelectors.length; i++) {
-                buyNowButtons = driver.findElements(buttonSelectors[i]);
-                System.out.println("  → Selector " + (i+1) + ": Found " + buyNowButtons.size() + " buttons");
-                if (!buyNowButtons.isEmpty()) {
-                    break;
-                }
-            }
+            System.out.println("  → Found " + buyNowButtons.size() + " Buy Now buttons");
             
             if (buyNowButtons.isEmpty()) {
-                System.out.println("  ✗ CRITICAL: No Buy Now buttons found with ANY selector!");
-                savePageSource();
+                System.out.println("  ✗ No Buy Now buttons found!");
                 return courses;
             }
             
-            System.out.println("  ✓ Total buttons found: " + buyNowButtons.size());
-            System.out.println("  → Now extracting course names from each button...\n");
+            // CRITICAL FIX: Limit to first 3-5 courses to avoid false positives
+            int coursesToProcess = Math.min(5, buyNowButtons.size());
+            System.out.println("  → Processing first " + coursesToProcess + " courses");
             
-            // For each button, find the course name in its parent container
-            for (int i = 0; i < buyNowButtons.size(); i++) {
+            // For each button, find the course name
+            for (int i = 0; i < coursesToProcess; i++) {
                 WebElement button = buyNowButtons.get(i);
                 try {
+                    // Scroll button into view
                     js.executeScript("arguments[0].scrollIntoView({block: 'center'});", button);
                     sleep(1);
                     
+                    // Navigate up to find the course container
                     WebElement container = button.findElement(By.xpath("./ancestor::div[contains(@class, 'col')]"));
                     
                     String courseName = "";
                     
-                    // Try to find title
+                    // Method 1: Look for heading tags (h3, h4, h5)
                     try {
-                        WebElement titleElem = container.findElement(By.xpath(".//h1 | .//h2 | .//h3 | .//h4 | .//h5 | .//h6 | .//*[contains(@class, 'title')]"));
+                        WebElement titleElem = container.findElement(
+                            By.xpath(".//h3 | .//h4 | .//h5 | .//*[contains(@class, 'title') or contains(@class, 'heading')]"));
                         courseName = titleElem.getText().trim();
-                    } catch (Exception e) {
-                        // If no title, get all text and find the first valid line
-                        String allText = container.getText().trim();
+                        System.out.println("  → Method 1: Found title: " + courseName);
+                    } catch (Exception e) {}
+                    
+                    // Method 2: Look for anchor with substantial text
+                    if (courseName.isEmpty()) {
+                        try {
+                            WebElement linkElem = container.findElement(
+                                By.xpath(".//a[string-length(normalize-space(text())) > 15]"));
+                            courseName = linkElem.getText().trim();
+                            System.out.println("  → Method 2: Found link text: " + courseName);
+                        } catch (Exception e) {}
+                    }
+                    
+                    // Method 3: Get all text and find first valid line
+                    if (courseName.isEmpty()) {
+                        String allText = container.getText();
                         String[] lines = allText.split("\n");
                         for (String line : lines) {
                             line = line.trim();
                             if (isValidCBTCourseName(line)) {
                                 courseName = line;
+                                System.out.println("  → Method 3: Found from text: " + courseName);
                                 break;
                             }
                         }
                     }
-
-                    if (courseName.isEmpty() || !isValidCBTCourseName(courseName)) {
-                        courseName = "CBT_Course_" + (courses.size() + 1);
-                        System.out.println("    [" + (i+1) + "] Using generic name: " + courseName);
+                    
+                    // Only add if valid course name found, otherwise use generic
+                    if (!courseName.isEmpty() && isValidCBTCourseName(courseName)) {
+                        courses.add(courseName);
+                        System.out.println("  ✓ Found course: " + courseName);
+                    } else {
+                        // Use generic name only as last resort
+                        courseName = "CBT Course " + (i + 1);
+                        courses.add(courseName);
+                        System.out.println("  → Using generic name: " + courseName);
                     }
-                    
-                    courses.add(courseName);
-                    System.out.println("  ✓ [" + courses.size() + "] Added: " + courseName + "\n");
-                    
                 } catch (Exception e) {
-                    System.out.println("  ⚠ Button " + (i+1) + " skipped: " + e.getMessage());
-                    String fallbackName = "CBT_Course_" + (courses.size() + 1);
-                    courses.add(fallbackName);
-                    System.out.println("  → Added fallback: " + fallbackName + "\n");
+                    System.out.println("  ⚠ Skipped course " + (i + 1) + ": " + e.getMessage());
                 }
             }
             
+            // Remove duplicates while preserving order
             List<String> uniqueCourses = new ArrayList<>(new LinkedHashSet<>(courses));
-            System.out.println("  ✓ Total unique courses: " + uniqueCourses.size());
             
             return uniqueCourses;
             
         } catch (Exception e) {
             System.out.println("✗ Error discovering courses: " + e.getMessage());
             e.printStackTrace();
-            takeDebugScreenshot("discovery_error");
             return courses;
         }
     }
 
     private static boolean isValidCBTCourseName(String text) {
-        if (text.length() < 10) return false;
+        if (text == null || text.length() < 10) return false;
+        
         String lower = text.toLowerCase();
         
+        // Must contain relevant keywords
         if (!lower.contains("all india") && !lower.contains("dams") && 
             !lower.contains("neet") && !lower.contains("mds") && 
             !lower.contains("fmge") && !lower.contains("combo") && 
-            !lower.contains("cbt")) {
+            !lower.contains("cbt") && !lower.contains("test")) {
             return false;
         }
         
+        // Filter out invalid terms
         String[] invalid = {
             "test instructions", "buy now", "registration", "exam date", 
             "noida", "delhi", "select", "choose", "click here", "view details",
-            "registration last date", "download app", "app store", "google play"
+            "registration last date", "download app", "app store", "google play",
+            "view qr", "screenshot"
         };
         
         for (String term : invalid) {
@@ -498,6 +450,7 @@ public class DamsDelhiLogin {
                 return false;
             }
         }
+        
         return true;
     }
 
@@ -508,139 +461,156 @@ public class DamsDelhiLogin {
         
         try {
             // Step 1: Find and click the specific Buy Now button
-            // FIXED: Use the same robust selector logic from discoverCBTCourses
-            List<WebElement> buyButtons = new ArrayList<>();
-            By[] buttonSelectors = {
-                By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"),
-                By.xpath("//button[contains(@class, 'butBtn')]"),
-                By.xpath("//div[contains(@class, 'col')]//button[contains(normalize-space(), 'Buy Now')]"),
-                By.xpath("//div[contains(@class, 'col')]//button[not(contains(., 'View')) and not(contains(., 'Details'))]"),
-                By.xpath("//button[contains(text(), 'Buy') or contains(text(), 'buy')]"),
-                By.xpath("//div[contains(@class, 'col')]//button[@type='button']")
-            };
-
-            for (By selector : buttonSelectors) {
-                buyButtons = driver.findElements(selector);
-                if (!buyButtons.isEmpty()) {
-                    System.out.println("  → Found " + buyButtons.size() + " buttons using selector: " + selector);
-                    break;
-                }
-            }
-
-            if (buyButtons.isEmpty()) {
-                throw new Exception("Could not find any Buy buttons with any selector");
-            }
+            List<WebElement> buyButtons = driver.findElements(
+                By.xpath("//button[contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
             
             if (courseIndex < buyButtons.size()) {
                 WebElement buyBtn = buyButtons.get(courseIndex);
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", buyBtn);
+                sleep(2);
                 js.executeScript("arguments[0].click();", buyBtn);
                 System.out.println("  ✓ Step 1: Clicked Buy Now");
+                sleep(3);
             } else {
-                throw new Exception("Buy button not found for index " + courseIndex + ". (Found " + buyButtons.size() + " buttons)");
+                throw new Exception("Buy button not found for index " + courseIndex);
             }
             
             // Step 1.5: Handle CBT (Center Based Test) Modal
             try {
-                // Wait for modal to be visible
                 WebElement cbtModal = wait.until(ExpectedConditions.visibilityOfElementLocated(
                     By.xpath("//div[@class='popup' and .//div[@id='cbt_hide']]")));
-                System.out.println("  ✓ Step 1.5a: CBT Modal detected.");
+                System.out.println("  ✓ CBT Modal detected");
                 
                 WebElement cbtRadioLabel = cbtModal.findElement(
                     By.xpath(".//label[contains(normalize-space(), 'CBT (Center Based Test)')]"));
                 js.executeScript("arguments[0].click();", cbtRadioLabel);
-                System.out.println("  ✓ Step 1.5b: Clicked 'CBT (Center Based Test)' radio button.");
+                System.out.println("  ✓ Clicked 'CBT (Center Based Test)'");
+                sleep(1);
                 
                 WebElement modalOkButton = cbtModal.findElement(
                     By.xpath(".//button[normalize-space()='OK']"));
                 js.executeScript("arguments[0].click();", modalOkButton);
-                System.out.println("  ✓ Step 1.5c: Clicked 'OK' on CBT modal.");
+                System.out.println("  ✓ Clicked OK on CBT modal");
+                sleep(3);
                 
             } catch (Exception e) {
-                System.out.println("  ℹ Step 1.5: CBT Modal not found or skipped");
+                System.out.println("  ℹ CBT Modal skipped");
             }
             
-            // Step 2: Click Flex button (City Selection - show_data_city)
+            // Step 2: Click Flex button
             try {
-                // Wait for button to be clickable
-                WebElement flexBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                WebElement flexBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[contains(@class, 'show_data_city')]")));
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", flexBtn);
+                sleep(1);
                 js.executeScript("arguments[0].click();", flexBtn);
-                System.out.println("  ✓ Step 2: Clicked Flex Button (show_data_city)");
+                System.out.println("  ✓ Step 2: Clicked Flex Button");
+                sleep(2);
             } catch (Exception e) {
-                System.out.println("  ℹ Step 2: Flex button skipped (may not be required)");
+                System.out.println("  ℹ Flex button skipped");
             }
             
-            // Step 3: Select Delhi location
+            // Step 3: Select Delhi
             try {
-                // Wait for Delhi button to be clickable
-                WebElement delhiBtn = wait.until(ExpectedConditions.elementToBeClickable(
-                    By.xpath("//button[contains(text(), 'Delhi') or contains(@data-city, 'Delhi')]")));
+                WebElement delhiBtn = driver.findElement(
+                    By.xpath("//button[contains(text(), 'Delhi') or contains(@data-city, 'Delhi')]"));
                 js.executeScript("arguments[0].click();", delhiBtn);
                 System.out.println("  ✓ Step 3: Selected Delhi");
+                sleep(2);
             } catch (Exception e) {
-                System.out.println("  ℹ Step 3: Delhi selection skipped");
+                System.out.println("  ℹ Delhi selection skipped");
             }
             
-            // Step 4: Click Red Button (Place Order - btn-danger btn-block)
+            // Step 4: Click Red Button (Place Order)
             try {
-                // Wait for Red button to be clickable
-                WebElement redBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                WebElement redBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[contains(@class, 'btn-danger') and contains(@class, 'btn-block')]")));
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", redBtn);
+                sleep(1);
                 js.executeScript("arguments[0].click();", redBtn);
-                System.out.println("  ✓ Step 4: Clicked Red Button (btn-danger btn-block)");
+                System.out.println("  ✓ Step 4: Clicked Red Button");
+                sleep(3);
             } catch (Exception e) {
-                System.out.println("  ⚠ Step 4: Red button not found: " + e.getMessage());
+                System.out.println("  ⚠ Red button not found");
             }
             
-            // Step 5: Select Paytm payment option
+            // Step 5: Select Paytm
             try {
-                // Wait for Paytm option to be visible
-                By paytmSelector = By.xpath("//label[.//span[contains(text(), 'Paytm')]] | //span[contains(text(), 'Paytm')]/ancestor::label");
-                WebElement paytm = wait.until(ExpectedConditions.visibilityOfElementLocated(paytmSelector));
-                js.executeScript("arguments[0].click();", paytm);
-                System.out.println("  ✓ Step 5: Selected Paytm");
+                WebElement paytm = null;
+                By[] paytmSelectors = {
+                    By.xpath("//label[.//span[contains(text(), 'Paytm')]]"),
+                    By.xpath("//span[contains(text(), 'Paytm')]/ancestor::label"),
+                    By.xpath("//input[@value='paytm']/parent::label"),
+                    By.xpath("//*[contains(text(), 'Paytm')]")
+                };
+                
+                for (By selector : paytmSelectors) {
+                    try {
+                        paytm = wait.until(ExpectedConditions.presenceOfElementLocated(selector));
+                        if (paytm.isDisplayed()) {
+                            break;
+                        }
+                    } catch (Exception e) {}
+                }
+                
+                if (paytm != null) {
+                    js.executeScript("arguments[0].click();", paytm);
+                    System.out.println("  ✓ Step 5: Selected Paytm");
+                    sleep(2);
+                }
             } catch (Exception e) {
-                System.out.println("  ℹ Step 5: Paytm selection skipped: " + e.getMessage());
+                System.out.println("  ℹ Paytm selection skipped");
             }
             
             // Step 6: Click Payment button
             try {
-                // Wait for Payment button to be clickable
-                By paymentSelector = By.xpath("//button[@type='button' and contains(@class, 'ant-btn-primary')] | //button[contains(text(), 'Pay')]");
-                WebElement paymentBtn = wait.until(ExpectedConditions.elementToBeClickable(paymentSelector));
-                js.executeScript("arguments[0].click();", paymentBtn);
-                System.out.println("  ✓ Step 6: Clicked Payment Button");
+                WebElement paymentBtn = null;
+                By[] paymentSelectors = {
+                    By.xpath("//button[@type='button' and contains(@class, 'ant-btn-primary') and contains(@class, 'ant-btn-block')]"),
+                    By.xpath("//button[contains(text(), 'Pay') or contains(text(), 'Proceed')]"),
+                    By.xpath("//button[contains(@class, 'btn-primary') and contains(@class, 'btn-block')]")
+                };
+                
+                for (By selector : paymentSelectors) {
+                    try {
+                        paymentBtn = wait.until(ExpectedConditions.presenceOfElementLocated(selector));
+                        if (paymentBtn.isDisplayed()) {
+                            break;
+                        }
+                    } catch (Exception e) {}
+                }
+                
+                if (paymentBtn != null) {
+                    js.executeScript("arguments[0].click();", paymentBtn);
+                    System.out.println("  ✓ Step 6: Clicked Payment Button");
+                    sleep(2);
+                }
             } catch (Exception e) {
-                System.out.println("  ⚠ Step 6: Payment button issue: " + e.getMessage());
+                System.out.println("  ⚠ Payment button issue");
             }
             
-            // Step 7: Wait for QR code to appear
-            System.out.println("  ⏳ Step 7: Waiting for QR code to appear (max " + QR_CODE_WAIT_TIMEOUT.getSeconds() + "s)...");
-            WebDriverWait qrWait = new WebDriverWait(driver, QR_CODE_WAIT_TIMEOUT);
+            // Step 7: Wait for QR code
+            System.out.println("  ⏳ Step 7: Waiting for QR code (max 60s)...");
+            WebDriverWait qrWait = new WebDriverWait(driver, Duration.ofSeconds(60));
             
             try {
                 By qrLocator = By.xpath("//canvas | //img[contains(@class, 'qr') or contains(@class, 'QR') or contains(@src, 'data:image')]");
                 qrWait.until(ExpectedConditions.presenceOfElementLocated(qrLocator));
-                System.out.println("  ✓ QR code element detected. Pausing 2s for full render...");
-                sleep(2); // Short sleep for canvas render
+                System.out.println("  ✓ QR code detected");
+                sleep(2);
             } catch (Exception e) {
-                System.out.println("  ⚠ Explicit QR element wait timed out after " + QR_CODE_WAIT_TIMEOUT.getSeconds() + "s.");
-                System.out.println("  ⚠ Will attempt screenshot anyway, but it may be blank or incorrect.");
+                System.out.println("  ⚠ QR wait timeout");
             }
             
-            // Step 8: Capture QR screenshot
+            // Step 8: Capture screenshot
             String fileTimestamp = fileFormat.format(new Date());
             String filename = "screenshots/CBT_QR_" + courseName.replaceAll("[^a-zA-Z0-9]", "_") + 
-                             "_" + fileTimestamp + ".png";
+                            "_" + fileTimestamp + ".png";
             
             File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
             copyFile(screenshot, new File(filename));
             screenshotPath = filename;
-            System.out.println("  ✓ Step 8: QR screenshot saved: " + filename);
+            System.out.println("  ✓ Step 8: Screenshot saved: " + filename);
             
             // Step 9: Close payment window
             closePaymentWindow();
@@ -656,7 +626,6 @@ public class DamsDelhiLogin {
             totalFailed++;
             System.out.println("  ❌ Course processing failed: " + errorMsg);
             e.printStackTrace();
-            takeDebugScreenshot("process_course_failed_" + courseName.replaceAll("[^a-zA-Z0-9]", "_"));
         }
     }
 
@@ -665,41 +634,68 @@ public class DamsDelhiLogin {
             System.out.println("\n  → Returning to CBT section...");
             
             driver.get("https://www.damsdelhi.com/");
+            sleep(3);
             
-            // Wait for hamburger to be clickable
-            WebElement hamburger = wait.until(ExpectedConditions.elementToBeClickable(
-                By.className("humburgerIcon")));
-            js.executeScript("arguments[0].click();", hamburger);
-            System.out.println("  ✓ Clicked: Hamburger Menu");
-            
-            // Wait for CBT button to be clickable
-            By cbtSelector = By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]");
-            WebElement cbtElem = wait.until(ExpectedConditions.elementToBeClickable(cbtSelector));
-            
-            js.executeScript("arguments[0].click();", cbtElem);
-            System.out.println("  ✓ Clicked: CBT button");
-            
-            // Click OK button (Red)
+            boolean hamburgerClicked = false;
             try {
-                WebElement okBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.className("humburgerIcon")));
+                js.executeScript("arguments[0].click();", hamburger);
+                System.out.println("  ✓ Clicked Hamburger");
+                hamburgerClicked = true;
+                sleep(2);
+            } catch (Exception e) {
+                System.out.println("  ✗ Failed hamburger");
+            }
+            
+            if (!hamburgerClicked) return;
+            
+            boolean cbtClicked = false;
+            By[] cbtSelectors = {
+                By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
+                By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
+                By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
+            };
+            
+            for (By selector : cbtSelectors) {
+                try {
+                    List<WebElement> cbtElements = driver.findElements(selector);
+                    for (WebElement cbtElem : cbtElements) {
+                        if (cbtElem.isDisplayed() && cbtElem.getText().trim().equals("CBT")) {
+                            js.executeScript("arguments[0].click();", cbtElem);
+                            System.out.println("  ✓ Clicked CBT");
+                            cbtClicked = true;
+                            sleep(2);
+                            break;
+                        }
+                    }
+                    if (cbtClicked) break;
+                } catch (Exception e) {}
+            }
+            
+            if (!cbtClicked) {
+                System.out.println("  ✗ Failed to click CBT");
+                return;
+            }
+            
+            // Click OK button
+            try {
+                WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
                 js.executeScript("arguments[0].click();", okBtn);
-                System.out.println("  ✓ Clicked: OK Button (Red)");
-                // Wait for buttons to load again
-                wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath("//div[contains(@class, 'col') and .//button]")));
+                System.out.println("  ✓ Clicked OK Button");
+                sleep(3);
             } catch (Exception e) {
-                System.out.println("  ✗ Failed OK button: " + e.getMessage());
+                System.out.println("  ✗ Failed OK button");
             }
             
         } catch (Exception e) {
-            System.out.println("  ⚠ Error returning to CBT section: " + e.getMessage());
-            takeDebugScreenshot("return_cbt_error");
+            System.out.println("  ⚠ Error returning to CBT: " + e.getMessage());
         }
     }
 
     private static void closePaymentWindow() {
         try {
-            // Close payment window
             By[] closeSelectors = {
                 By.xpath("//span[contains(@class, 'ptm-cross') and @id='app-close-btn']"),
                 By.id("app-close-btn"),
@@ -708,38 +704,64 @@ public class DamsDelhiLogin {
             
             for (By selector : closeSelectors) {
                 try {
-                    // Use short wait, as it might not exist
-                    WebDriverWait shortWait = new WebDriverWait(driver, Duration.ofSeconds(2));
-                    WebElement closeBtn = shortWait.until(ExpectedConditions.elementToBeClickable(selector));
+                    WebElement closeBtn = driver.findElement(selector);
                     js.executeScript("arguments[0].click();", closeBtn);
                     System.out.println("  ✓ Closed payment window");
-                    sleep(5); // Wait for close
+                    sleep(8);
                     break;
                 } catch (Exception e) {}
             }
             
-            // Handle other popups (feedback, etc.)
-            // ... (Your existing logic is fine) ...
+            // Skip feedback
+            By[] skipSelectors = {
+                By.xpath("//button[contains(@class, 'ptm-feedback-btn') and contains(text(), 'Skip')]"),
+                By.xpath("//button[contains(text(), 'Skip')]")
+            };
+            
+            for (By selector : skipSelectors) {
+                try {
+                    WebElement skipBtn = driver.findElement(selector);
+                    js.executeScript("arguments[0].click();", skipBtn);
+                    sleep(2);
+                    break;
+                } catch (Exception e) {}
+            }
+            
+            // Close modals
+            By[] modalSelectors = {
+                By.xpath("//span[contains(@class, 'ant-modal-close-x')]"),
+                By.xpath("//button[contains(@class, 'ant-modal-close')]")
+            };
+            
+            for (By selector : modalSelectors) {
+                try {
+                    WebElement modalBtn = driver.findElement(selector);
+                    js.executeScript("arguments[0].click();", modalBtn);
+                    sleep(2);
+                    break;
+                } catch (Exception e) {}
+            }
             
         } catch (Exception e) {
-            System.out.println("  ⚠ Issue closing payment window: " + e.getMessage());
+            System.out.println("  ⚠ Issue closing payment");
         }
     }
 
     private static void clickElement(By locator, String name) {
         try {
-            WebElement elem = wait.until(ExpectedConditions.elementToBeClickable(locator));
+            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
             js.executeScript("arguments[0].scrollIntoView({block: 'center'});", elem);
+            sleep(1);
             js.executeScript("arguments[0].click();", elem);
             System.out.println("  ✓ Clicked: " + name);
         } catch (Exception e) {
-            System.out.println("  ✗ Failed to click: " + name + " - " + e.getMessage());
+            System.out.println("  ✗ Failed to click: " + name);
         }
     }
 
     private static void enterText(By locator, String text, String fieldName) {
         try {
-            WebElement elem = wait.until(ExpectedConditions.visibilityOfElementLocated(locator));
+            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
             elem.clear();
             elem.sendKeys(text);
             System.out.println("  ✓ Entered: " + fieldName);
@@ -760,34 +782,6 @@ public class DamsDelhiLogin {
         Files.copy(source.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 
-    private static void takeDebugScreenshot(String name) {
-        if (driver == null) {
-            System.out.println("  ✗ Cannot take debug screenshot, driver is null.");
-            return;
-        }
-        try {
-            String timestamp = fileFormat.format(new Date());
-            String filename = "screenshots/DEBUG_" + name + "_" + timestamp + ".png";
-            File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-            copyFile(screenshot, new File(filename));
-            System.out.println("  📸 Debug screenshot saved: " + filename);
-        } catch (Exception e) {
-            System.out.println("  ✗ Failed to take debug screenshot: " + e.getMessage());
-        }
-    }
-
-    // NEW: Utility to save page source for debugging
-    private static void savePageSource() {
-        try {
-            FileWriter sourceWriter = new FileWriter("page_source_debug.html");
-            sourceWriter.write(driver.getPageSource());
-            sourceWriter.close();
-            System.out.println("  → Page source saved to: page_source_debug.html");
-        } catch (Exception e) {
-            System.out.println("  ✗ Failed to save page source: " + e.getMessage());
-        }
-    }
-
     private static void generateDetailedReport() {
         System.out.println("\nGenerating detailed HTML report...");
         
@@ -804,13 +798,9 @@ public class DamsDelhiLogin {
             html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
             html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
             html.append(".container { max-width: 1400px; margin: 0 auto; }\n");
-            
-            // Header
             html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
             html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
             html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
-            
-            // Summary
             html.append(".summary { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
             html.append(".summary h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
             html.append(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }\n");
@@ -819,67 +809,51 @@ public class DamsDelhiLogin {
             html.append(".stat-card .value { font-size: 48px; font-weight: 700; }\n");
             html.append(".stat-card.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
             html.append(".stat-card.failed { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }\n");
-            
-            // Results table
-            html.append(".results { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); overflow-x: auto; }\n");
+            html.append(".results { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
             html.append(".results h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
             html.append("table { width: 100%; border-collapse: collapse; }\n");
             html.append("thead { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }\n");
             html.append("th { padding: 15px; text-align: left; font-weight: 600; }\n");
             html.append("tbody tr { border-bottom: 1px solid #e2e8f0; transition: background 0.3s; }\n");
             html.append("tbody tr:hover { background: #f7fafc; }\n");
-            html.append("td { padding: 15px; word-break: break-word; }\n");
+            html.append("td { padding: 15px; }\n");
             html.append(".status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }\n");
             html.append(".status-success { background: #c6f6d5; color: #22543d; }\n");
             html.append(".status-failed { background: #fed7d7; color: #742a2a; }\n");
             html.append(".screenshot-link { color: #667eea; text-decoration: none; font-weight: 600; }\n");
             html.append(".screenshot-link:hover { text-decoration: underline; }\n");
-            html.append(".error-msg { color: #e53e3e; font-size: 12px; font-style: italic; max-width: 300px; }\n");
-            
-            // Footer
+            html.append(".error-msg { color: #e53e3e; font-size: 12px; font-style: italic; }\n");
             html.append(".footer { text-align: center; color: white; margin-top: 40px; padding: 20px; }\n");
-            
             html.append("@media (max-width: 768px) {\n");
             html.append("  .header h1 { font-size: 32px; }\n");
             html.append("  .summary, .results { padding: 25px 20px; }\n");
             html.append("  table { font-size: 14px; }\n");
             html.append("  th, td { padding: 10px; }\n");
             html.append("}\n");
-            
             html.append("</style>\n</head>\n<body>\n");
             html.append("<div class='container'>\n");
-            
-            // Header
             html.append("<div class='header'>\n");
             html.append("<h1>🎯 DAMS CBT Automation Report</h1>\n");
             html.append("<p class='subtitle'>Comprehensive CBT Course Purchase Summary</p>\n");
             html.append("</div>\n");
-            
-            // Summary
             html.append("<div class='summary'>\n");
             html.append("<h2>📊 Execution Summary</h2>\n");
             html.append("<div class='stats-grid'>\n");
-            
             html.append("<div class='stat-card'>\n");
-            html.append("<div class'label'>Total Courses Attempted</div>\n");
+            html.append("<div class='label'>Total Courses Attempted</div>\n");
             html.append("<div class='value'>").append(courseResults.size()).append("</div>\n");
             html.append("</div>\n");
-            
             html.append("<div class='stat-card success'>\n");
             html.append("<div class='label'>Successful Purchases</div>\n");
             html.append("<div class='value'>").append(totalSuccessful).append("</div>\n");
             html.append("</div>\n");
-            
             html.append("<div class='stat-card failed'>\n");
             html.append("<div class='label'>Failed Attempts</div>\n");
             html.append("<div class='value'>").append(totalFailed).append("</div>\n");
             html.append("</div>\n");
-            
             html.append("</div>\n");
             html.append("<p style='margin-top: 20px; color: #4a5568;'><strong>Execution Time:</strong> " + executionStartTime + "</p>\n");
             html.append("</div>\n");
-            
-            // Results table
             html.append("<div class='results'>\n");
             html.append("<h2>📋 Detailed Results</h2>\n");
             html.append("<table>\n");
@@ -895,47 +869,33 @@ public class DamsDelhiLogin {
             html.append("</thead>\n");
             html.append("<tbody>\n");
             
-            if (courseResults.isEmpty()) {
-                 html.append("<tr><td colspan='6' style='text-align: center; padding: 20px; color: #718096;'>No courses were processed. Check debug screenshots for errors.</td></tr>\n");
-            }
-
             for (int i = 0; i < courseResults.size(); i++) {
                 CourseResult result = courseResults.get(i);
                 html.append("<tr>\n");
                 html.append("<td>").append(i + 1).append("</td>\n");
                 html.append("<td>").append(result.courseName).append("</td>\n");
-                
                 String statusClass = result.status.equals("SUCCESS") ? "status-success" : "status-failed";
                 html.append("<td><span class='status-badge ").append(statusClass).append("'>").append(result.status).append("</span></td>\n");
-                
                 html.append("<td>").append(result.timestamp).append("</td>\n");
-                
                 if (result.screenshotPath != null) {
-                    // Make screenshot path relative for GH Pages
-                    String relativePath = "screenshots/" + new File(result.screenshotPath).getName();
-                    html.append("<td><a href='").append(relativePath).append("' class='screenshot-link' target='_blank'>View QR</a></td>\n");
+                    html.append("<td><a href='").append(result.screenshotPath).append("' class='screenshot-link' target='_blank'>View QR</a></td>\n");
                 } else {
                     html.append("<td>-</td>\n");
                 }
-                
                 if (result.errorMessage != null) {
-                    html.append("<td><span class'error-msg'>").append(result.errorMessage).append("</span></td>\n");
+                    html.append("<td><span class='error-msg'>").append(result.errorMessage).append("</span></td>\n");
                 } else {
                     html.append("<td>-</td>\n");
                 }
-                
                 html.append("</tr>\n");
             }
             
             html.append("</tbody>\n");
             html.append("</table>\n");
             html.append("</div>\n");
-            
-            // Footer
             html.append("<div class='footer'>\n");
             html.append("<p>Generated by DAMS CBT Automation System | Powered by Selenium WebDriver</p>\n");
             html.append("</div>\n");
-            
             html.append("</div>\n");
             html.append("</body>\n</html>");
             
