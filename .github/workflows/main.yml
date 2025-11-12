@@ -188,21 +188,37 @@ jobs:
           echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           
-      - name: 📊 Upload Screenshots
+      # ✅ ONLY GitHub Pages artifact will be created
+      # Screenshots and HTML reports will be included directly in Pages deployment
+      
+      - name: 📦 Prepare Files for GitHub Pages
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qr-screenshots-${{ github.run_id }}
-          path: screenshots/
-          retention-days: 30
-          if-no-files-found: warn
+        run: |
+          mkdir -p ./github-pages-content/screenshots
           
-      - name: 📄 Upload HTML Report
+          # Copy HTML report
+          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
+            cp DAMS_CBT_Report_*.html ./github-pages-content/
+            echo "✓ HTML report copied"
+          fi
+          
+          # Copy screenshots
+          if [ -d "screenshots" ] && [ "$(ls -A screenshots)" ]; then
+            cp screenshots/*.png ./github-pages-content/screenshots/ 2>/dev/null || true
+            echo "✓ Screenshots copied"
+          fi
+          
+          echo "✓ All files prepared for GitHub Pages"
+          ls -la ./github-pages-content/
+          ls -la ./github-pages-content/screenshots/ || true
+      
+      # ✅ Upload as workflow artifact (for deploy-reports job)
+      - name: 📤 Upload GitHub Pages Content
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: html-report-${{ github.run_id }}
-          path: DAMS_CBT_Report_*.html
+          name: github-pages-content
+          path: ./github-pages-content/
           retention-days: 30
           if-no-files-found: warn
           
@@ -236,20 +252,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
       
     steps:
-      - name: 📥 Download HTML Reports
+      - name: 📥 Download GitHub Pages Content
         uses: actions/download-artifact@v4
         with:
-          pattern: html-report-*
-          merge-multiple: true
+          name: github-pages-content
           path: ./reports
-        continue-on-error: true
-        
-      - name: 📥 Download Screenshots
-        uses: actions/download-artifact@v4
-        with:
-          pattern: qr-screenshots-*
-          merge-multiple: true
-          path: ./reports/screenshots
         continue-on-error: true
         
       - name: 🏗️ Create Index Page
