@@ -348,9 +348,9 @@ public class DamsDelhiLogin {
                 return courses;
             }
             
-            // CRITICAL FIX: Limit to first 3-5 courses to avoid false positives
-            int coursesToProcess = Math.min(5, buyNowButtons.size());
-            System.out.println("  → Processing first " + coursesToProcess + " courses");
+            // CRITICAL FIX: Limit to EXACTLY 3 courses only
+            int coursesToProcess = Math.min(3, buyNowButtons.size());
+            System.out.println("  → Processing EXACTLY " + coursesToProcess + " courses (LIMITED TO 3)");
             
             // For each button, find the course name
             for (int i = 0; i < coursesToProcess; i++) {
