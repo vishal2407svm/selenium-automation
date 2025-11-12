@@ -71,8 +71,6 @@ jobs:
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.15.0/selenium-http-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
-          
-          # CRITICAL: Missing dependency that caused the error
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.15.0/selenium-os-4.15.0.jar
           
           # Google dependencies
@@ -97,7 +95,7 @@ jobs:
           wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
           wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
           
-          # Byte Buddy (for runtime code generation)
+          # Byte Buddy
           wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.9/byte-buddy-1.14.9.jar
           
           # SLF4J Logging
@@ -119,6 +117,15 @@ jobs:
           mkdir -p compiled
           echo "✓ Directories created"
           
+      # ⭐⭐⭐ NAYA STEP - ChromeDriver Path Set Karo ⭐⭐⭐
+      - name: 🔧 Set ChromeDriver Path
+        run: |
+          export PATH=$PATH:/usr/bin
+          echo "PATH=$PATH" >> $GITHUB_ENV
+          which chromedriver
+          chromedriver --version
+          echo "✓ ChromeDriver path configured"
+          
       - name: 🏗️ Compile Java Code
         run: |
           echo "Compiling DamsDelhiLogin.java..."
@@ -134,9 +141,11 @@ jobs:
             exit 1
           fi
           
+      # ⭐⭐⭐ TIMEOUT ADD KIYA ⭐⭐⭐
       - name: 🚀 Run DAMS CBT Automation
         env:
           CI: true
+        timeout-minutes: 30
         run: |
           echo "Starting automation execution..."
           echo "======================================"
