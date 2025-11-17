@@ -1,111 +1,79 @@
-name: DAMS Parallel Automation
+# This workflow runs your DAMSParallel.java file without Maven.
+# It manually downloads the Selenium JAR, compiles, and runs the code.
+name: Run DAMS Parallel Java Test
 
+# This allows you to trigger the workflow manually from the GitHub UI
 on:
   workflow_dispatch:
-    inputs:
-      phone_numbers:
-        description: 'Comma-separated phone numbers (e.g., +919456628016,+919289790436,+917564012375,+919411611466)'
-        required: true
-        default: '+919456628016,+919289790436,+917564012375,+919411611466'
-      otp:
-        description: 'OTP for login'
-        required: true
-        default: '2000'
-      num_tabs:
-        description: 'Number of parallel tabs'
-        required: true
-        default: '4'
 
 jobs:
-  automation:
+  build-and-run:
+    # Use the latest Ubuntu runner
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-    
-    - name: Set up JDK 11
-      uses: actions/setup-java@v3
-      with:
-        java-version: '11'
-        distribution: 'temurin'
-    
-    - name: Install Chrome
-      run: |
-        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-        echo "deb http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
-        sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
-    
-    - name: Install ChromeDriver
-      run: |
-        CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1)
-        CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}")
-        wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-        unzip chromedriver_linux64.zip
-        sudo mv chromedriver /usr/local/bin/
-        sudo chmod +x /usr/local/bin/chromedriver
-        rm chromedriver_linux64.zip
-    
-    - name: Download Selenium dependencies
-      run: |
-        mkdir -p lib
-        wget -O lib/selenium-server-standalone.jar https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
-        wget -O lib/commons-io.jar https://repo1.maven.org/maven2/commons-io/commons-io/2.11.0/commons-io-2.11.0.jar
-    
-    - name: Create configuration file
-      run: |
-        cat > config.properties << EOF
-        phone.numbers=${{ github.event.inputs.phone_numbers }}
-        otp=${{ github.event.inputs.otp }}
-        num.tabs=${{ github.event.inputs.num_tabs }}
-        EOF
-    
-    - name: Compile Java code
-      run: |
-        javac -cp "lib/*:." DAMSParallel.java
-    
-    - name: Run automation
-      run: |
-        export DISPLAY=:99
-        Xvfb :99 -screen 0 1920x1080x24 &
-        sleep 3
-        java -cp "lib/*:." DAMSParallel
-      continue-on-error: true
-    
-    - name: Upload screenshots
-      if: always()
-      uses: actions/upload-artifact@v3
-      with:
-        name: dams-screenshots-${{ github.run_number }}
-        path: screenshots/
-        retention-days: 30
-    
-    - name: Upload HTML report
-      if: always()
-      uses: actions/upload-artifact@v3
-      with:
-        name: dams-report-${{ github.run_number }}
-        path: DAMS_Parallel_Report_*.html
-        retention-days: 30
-    
-    - name: Display summary
-      if: always()
-      run: |
-        echo "### DAMS Automation Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Run Number:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Phone Numbers:** ${{ github.event.inputs.phone_numbers }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Parallel Tabs:** ${{ github.event.inputs.num_tabs }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [ -d "screenshots" ]; then
-          SCREENSHOT_COUNT=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
-          echo "**Screenshots Captured:** $SCREENSHOT_COUNT" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        if ls DAMS_Parallel_Report_*.html 1> /dev/null 2>&1; then
-          echo "**Report Generated:** ✅ Yes" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "**Report Generated:** ❌ No" >> $GITHUB_STEP_SUMMARY
-        fi
+      # 1. Check out your repository's code
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      # 2. Set up Java (JDK 17)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 3. Set up Chrome and chromedriver
+      # This action automatically finds the right driver and adds it to the PATH
+      - name: Set up Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable # Use the latest stable version
+
+      # 4. Create a 'lib' directory for our JARs
+      - name: Create lib directory
+        run: mkdir lib
+
+      # 5. Download Selenium Server (Standalone) JAR
+      # This single JAR contains Selenium, commons-io, and all other needed dependencies.
+      # We use this to avoid Maven/Gradle.
+      - name: Download Selenium Server JAR
+        run: |
+          echo "Downloading Selenium Server 4.21.0..."
+          curl -L -o lib/selenium-server.jar "https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.21.0/selenium-server-4.21.0.jar"
+          echo "Download complete."
+          ls -lh lib/
+
+      # 6. Compile the Java file
+      # We add the downloaded JAR to the classpath (-cp)
+      - name: Compile Java code
+        run: |
+          javac -cp "lib/selenium-server.jar" DAMSParallel.java
+          echo "Compile complete."
+          ls -l *.class
+
+      # 7. Run the compiled Java class
+      # The classpath must include the current directory ('.') and the JAR.
+      # Note: Linux uses ':' as the classpath separator, not ';'
+      - name: Run Java test
+        run: |
+          java -cp ".:lib/selenium-server.jar" DAMSParallel
+
+      # 8. Upload Screenshots Artifact
+      # This 'if: always()' ensures artifacts are saved even if the Java run fails
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qr-code-screenshots
+          path: screenshots/
+          retention-days: 7 # Keep artifacts for 7 days
+
+      # 9. Upload HTML Report Artifact
+      - name: Upload HTML report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-report
+          path: DAMS_Parallel_Report_*.html # Use wildcard to find the report
+          retention-days: 7
