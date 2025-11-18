@@ -1,239 +1,79 @@
-name: DAMS CBT Automation (No Maven)
+name: Run DAMS Parallel Java Test (Auto)
 
+# Triggers: Manual, On Push (Automatic), and Scheduled (Automatic)
 on:
-  workflow_dispatch:
-    inputs:
-      run_description:
-        description: 'Description of this run'
-        required: false
-        default: 'Manual execution'
-  schedule:
-    - cron: '0 9 * * *'
+  workflow_dispatch: # Manual trigger
   push:
-    branches:
-      - main
-    paths:
-      - '**.java'
-      - '.github/workflows/**'
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-  actions: read
+    branches: [ "main" ] # Runs automatically when code is pushed to 'main'
+  schedule:
+    - cron: '0 0 * * *' # Runs automatically every day at midnight UTC
 
 jobs:
-  automation:
+  build-and-run:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    
+
     steps:
-      - name: 📥 Checkout Repository
+      # 1. Check out your repository's code
+      - name: Check out code
         uses: actions/checkout@v4
-        
-      - name: ☕ Setup Java 11
+
+      # 2. Set up Java (JDK 17)
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
+          java-version: '17'
           distribution: 'temurin'
-          java-version: '11'
-          
-      - name: 🔧 Setup Chrome and ChromeDriver
+
+      # 3. Set up Chrome
+      - name: Set up Chrome
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
-          
-      - name: 🔍 Verify Installation
+
+      # 4. Create a 'lib' directory
+      - name: Create lib directory
+        run: mkdir -p lib
+
+      # 5. Download Dependencies (Selenium + Commons IO)
+      - name: Download JAR dependencies
         run: |
-          echo "=== Chrome Version ==="
-          google-chrome --version
-          echo ""
-          echo "=== ChromeDriver Version ==="
-          chromedriver --version
-          echo ""
-          echo "=== Java Version ==="
-          java -version
+          echo "Downloading Selenium Server..."
+          curl -L -o lib/selenium-server.jar "https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.21.0/selenium-server-4.21.0.jar"
           
-      - name: 📦 Download Selenium JARs - COMPLETE SET
+          echo "Downloading Commons IO (Fix for FileUtils error)..."
+          curl -L -o lib/commons-io.jar "https://repo1.maven.org/maven2/commons-io/commons-io/2.14.0/commons-io-2.14.0.jar"
+          
+          echo "Download complete. Listing lib folder:"
+          ls -lh lib/
+
+      # 6. Compile the Java file
+      # FIX: Added commons-io.jar to the classpath separator (:)
+      - name: Compile Java code
         run: |
-          mkdir -p lib
-          cd lib
-          
-          echo "Downloading ALL required Selenium dependencies..."
-          
-          # Core Selenium JARs
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.15.0/selenium-api-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chromium-driver/4.15.0/selenium-chromium-driver-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.15.0/selenium-remote-driver-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.15.0/selenium-support-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-manager/4.15.0/selenium-manager-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.15.0/selenium-http-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.15.0/selenium-os-4.15.0.jar
-          
-          # Google dependencies
-          wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
-          wget -q https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar
-          wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
-          
-          # HTTP and Networking
-          wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
-          wget -q https://repo1.maven.org/maven2/io/netty/netty-all/4.1.100.Final/netty-all-4.1.100.Final.jar
-          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.2.1/httpclient5-5.2.1.jar
-          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.2.1/httpcore5-5.2.1.jar
-          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.2.1/httpcore5-h2-5.2.1.jar
-          
-          # Commons and Utilities
-          wget -q https://repo1.maven.org/maven2/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar
-          wget -q https://repo1.maven.org/maven2/org/apache/commons/commons-exec/1.3/commons-exec-1.3.jar
-          wget -q https://repo1.maven.org/maven2/commons-codec/commons-codec/1.16.0/commons-codec-1.16.0.jar
-          wget -q https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar
-          
-          # Failsafe and Testing
-          wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
-          wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
-          
-          # Byte Buddy
-          wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.9/byte-buddy-1.14.9.jar
-          
-          # SLF4J Logging
-          wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar
-          wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.9/slf4j-simple-2.0.9.jar
-          
-          echo ""
-          echo "✓ All JARs downloaded successfully!"
-          echo ""
-          echo "Total files:"
-          ls -1 | wc -l
-          echo ""
-          echo "Total size:"
-          du -sh .
-          
-      - name: 📁 Create Required Directories
+          javac -cp "lib/selenium-server.jar:lib/commons-io.jar" DAMSParallel.java
+          echo "Compile complete."
+          ls -l *.class
+
+      # 7. Run the compiled Java class
+      # FIX: Added commons-io.jar to the classpath
+      - name: Run Java test
         run: |
-          mkdir -p screenshots
-          mkdir -p compiled
-          echo "✓ Directories created"
-          
-      # ⭐⭐⭐ NAYA STEP - ChromeDriver Path Set Karo ⭐⭐⭐
-      - name: 🔧 Set ChromeDriver Path
-        run: |
-          export PATH=$PATH:/usr/bin
-          echo "PATH=$PATH" >> $GITHUB_ENV
-          which chromedriver
-          chromedriver --version
-          echo "✓ ChromeDriver path configured"
-          
-      - name: 🏗️ Compile Java Code
-        run: |
-          echo "Compiling DamsDelhiLogin.java..."
-          javac -cp "lib/*" -d compiled DamsDelhiLogin.java
-          
-          if [ $? -eq 0 ]; then
-            echo "✓ Compilation successful"
-            echo ""
-            echo "Compiled classes:"
-            ls -la compiled/
-          else
-            echo "✗ Compilation failed"
-            exit 1
-          fi
-          
-      # ⭐⭐⭐ TIMEOUT ADD KIYA ⭐⭐⭐
-      - name: 🚀 Run DAMS CBT Automation
-        env:
-          CI: true
-        timeout-minutes: 30
-        run: |
-          echo "Starting automation execution..."
-          echo "======================================"
-          java -cp "compiled:lib/*" DamsDelhiLogin
-          echo ""
-          echo "======================================"
-          echo "Execution completed"
-        continue-on-error: true
-        
-      - name: 📊 Check Results
-        if: always()
-        run: |
-          echo "=== Execution Summary ===" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -d "screenshots" ]; then
-            screenshot_count=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
-            echo "- **Screenshots Generated**: $screenshot_count" >> $GITHUB_STEP_SUMMARY
-            
-            if [ $screenshot_count -gt 0 ]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Screenshots List:" >> $GITHUB_STEP_SUMMARY
-              for file in screenshots/*.png; do
-                if [ -f "$file" ]; then
-                  filename=$(basename "$file")
-                  filesize=$(du -h "$file" | cut -f1)
-                  echo "- 📸 $filename ($filesize)" >> $GITHUB_STEP_SUMMARY
-                fi
-              done
-            fi
-          fi
-          
-          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
-            report_file=$(ls DAMS_CBT_Report_*.html | head -1)
-            report_size=$(du -h "$report_file" | cut -f1)
-            echo "- **HTML Report**: Generated ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          
-      # ✅ ONLY GitHub Pages artifact will be created
-      # Screenshots and HTML reports will be included directly in Pages deployment
-      
-      - name: 📦 Prepare Files for GitHub Pages
-        if: always()
-        run: |
-          mkdir -p ./github-pages-content/screenshots
-          
-          # Copy HTML report
-          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
-            cp DAMS_CBT_Report_*.html ./github-pages-content/
-            echo "✓ HTML report copied"
-          fi
-          
-          # Copy screenshots
-          if [ -d "screenshots" ] && [ "$(ls -A screenshots)" ]; then
-            cp screenshots/*.png ./github-pages-content/screenshots/ 2>/dev/null || true
-            echo "✓ Screenshots copied"
-          fi
-          
-          echo "✓ All files prepared for GitHub Pages"
-          ls -la ./github-pages-content/
-          ls -la ./github-pages-content/screenshots/ || true
-      
-      # ✅ Upload as workflow artifact (for deploy-reports job)
-      - name: 📤 Upload GitHub Pages Content
+          java -cp ".:lib/selenium-server.jar:lib/commons-io.jar" DAMSParallel
+
+      # 8. Upload Screenshots Artifact
+      - name: Upload screenshots artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: github-pages-content
-          path: ./github-pages-content/
-          retention-days: 30
-          if-no-files-found: warn
-          
-      - name: 🐛 Debug Information
-        if: failure()
-        run: |
-          echo "=== Debug Information ==="
-          pwd
-          ls -la
-          echo ""
-          echo "Screenshots:"
-          ls -la screenshots/ || echo "No screenshots"
-          echo ""
-          echo "Compiled:"
-          ls -la compiled/ || echo "No compiled"
-          echo ""
-          echo "Libraries:"
-          ls -la lib/ | head -20
+          name: qr-code-screenshots
+          path: screenshots/
+          retention-days: 7
+
+      # 9. Upload HTML Report Artifact
+      - name: Upload HTML report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-report
+          path: DAMS_Parallel_Report_*.html # Use wildcard to find the report
+          retention-days: 7
