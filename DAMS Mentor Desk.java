@@ -56,7 +56,7 @@ public class DAMSMentor {
             log("❌ FATAL ERROR: " + e.getMessage());
             e.printStackTrace();
             captureScreenshot("fatal_error");
-            System.exit(1); // Exit with error code for GitHub Actions
+            System.exit(1);
         } finally {
             generateReport();
             log("");
@@ -71,7 +71,6 @@ public class DAMSMentor {
     private static void setupDriver() {
         log("🔧 Setting up Chrome driver...");
         
-        // Check if running in CI environment
         boolean isCI = System.getenv("CI") != null;
         
         ChromeOptions options = new ChromeOptions();
@@ -83,13 +82,11 @@ public class DAMSMentor {
         options.setExperimentalOption("useAutomationExtension", false);
         
         if (isCI) {
-            // GitHub Actions specific settings
             options.addArguments("--headless");
             options.addArguments("--disable-gpu");
             options.addArguments("--window-size=1920,1080");
             log("✅ Running in headless mode (CI environment)");
         } else {
-            // Local environment
             options.addArguments("--start-maximized");
             String driverPath = "chromedriver.exe";
             File driverFile = new File(driverPath);
@@ -794,12 +791,10 @@ public class DAMSMentor {
             File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
             File destFile = new File(fullFileName);
             
-            // Use Java NIO Files.copy instead of Apache Commons FileUtils
             try {
                 Files.copy(screenshot.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException e) {
                 log("⚠️  Screenshot copy failed, trying alternative method...");
-                // Fallback: manual copy
                 java.io.FileInputStream fis = new java.io.FileInputStream(screenshot);
                 java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile);
                 byte[] buffer = new byte[1024];
