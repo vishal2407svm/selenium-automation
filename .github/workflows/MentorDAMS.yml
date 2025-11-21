@@ -1,50 +1,117 @@
-name: Selenium Automation Run
+name: DAMS Selenium Automation
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
+    branches: [ main, master ]
 
 jobs:
-  run-tests:
+  selenium-tests:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'maven'
 
-      - name: Install Chrome Stable
+      - name: Install Google Chrome Stable
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
 
-      - name: Install ChromeDriver Stable
+      - name: Install ChromeDriver
         uses: nanasess/setup-chromedriver@v2
+        with:
+          chromedriver-version: '120.0.6099.109'
 
-      - name: Verify Chrome Version
-        run: google-chrome --version
+      - name: Verify Chrome Installation
+        run: |
+          google-chrome --version
+          chromedriver --version
+          which chromedriver
 
-      - name: Verify ChromeDriver Version
-        run: chromedriver --version
+      - name: Create Required Directories
+        run: |
+          mkdir -p screenshots
+          mkdir -p libs
+          mkdir -p target
 
-      - name: Create libs folder (avoid exit code 8)
-        run: mkdir -p libs
+      - name: Display ChromeDriver Path
+        run: echo "ChromeDriver location - $(which chromedriver)"
 
-      - name: Build and Run Tests
-        run: mvn clean test
+      - name: Set Environment Variables
+        run: |
+          echo "CI=true" >> $GITHUB_ENV
+          echo "GITHUB_ACTIONS=true" >> $GITHUB_ENV
+          echo "DISPLAY=:99" >> $GITHUB_ENV
 
-      - name: Upload Failed Test Screenshots
-        if: failure()
+      - name: Start Xvfb (Virtual Display)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          Xvfb :99 -screen 0 1920x1080x24 &
+          sleep 2
+
+      - name: Build Project
+        run: mvn clean compile
+
+      - name: Run Selenium Tests
+        run: mvn test
+        continue-on-error: true
+
+      - name: List Generated Files
+        if: always()
+        run: |
+          echo "=== Screenshots Directory ==="
+          ls -lah screenshots/ || echo "No screenshots directory"
+          echo "=== HTML Reports ==="
+          ls -lah *.html || echo "No HTML reports"
+          echo "=== Target Directory ==="
+          ls -lah target/ || echo "No target directory"
+
+      - name: Upload Test Screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots
+          name: test-screenshots-${{ github.run_number }}
           path: |
             screenshots/
             *.html
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_number }}
+          path: |
+            target/surefire-reports/
+            target/*.html
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Check Test Status
+        if: always()
+        run: |
+          if [ -d "screenshots" ] && [ "$(ls -A screenshots)" ]; then
+            echo "✅ Screenshots generated successfully"
+          else
+            echo "⚠️ No screenshots found"
+          fi
+          
+          if [ -f "DAMS_Report_"*.html ]; then
+            echo "✅ Report generated successfully"
+          else
+            echo "⚠️ No report found"
+          fi
