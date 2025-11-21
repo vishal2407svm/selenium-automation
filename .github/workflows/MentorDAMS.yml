@@ -84,11 +84,27 @@ jobs:
           # Download Selenium Java bindings (Latest version)
           wget -q https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.15.0/selenium-java-4.15.0.zip
           unzip -o selenium-java-4.15.0.zip
-          mv selenium-java-4.15.0/* .
-          rm -rf selenium-java-4.15.0 selenium-java-4.15.0.zip
+          
+          # Check if extraction created a subfolder or direct files
+          if [ -d "selenium-java-4.15.0" ]; then
+            echo "Moving files from subfolder..."
+            mv selenium-java-4.15.0/* .
+            rmdir selenium-java-4.15.0
+          fi
+          
+          # Remove zip file
+          rm -f selenium-java-4.15.0.zip
+          
+          # Verify files exist
+          if [ ! -f "selenium-java-4.15.0.jar" ]; then
+            echo "ERROR: Selenium JAR files not found!"
+            ls -la
+            exit 1
+          fi
           
           cd ..
-          ls -la selenium-java/
+          echo "✅ Selenium files ready:"
+          ls -la selenium-java/ | head -20
       
       - name: Update configuration in Java file
         if: github.event_name == 'workflow_dispatch'
