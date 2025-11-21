@@ -40,41 +40,47 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
       
-      - name: Install ChromeDriver (New Method)
+      - name: Install ChromeDriver (WebDriver Manager)
         run: |
           CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1)
           echo "Chrome version: $CHROME_VERSION"
           
-          # Download matching ChromeDriver from new Google endpoint
-          CHROMEDRIVER_URL="https://googlechromelabs.github.io/chrome-for-testing/"
+          # Install Python if not available
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
           
-          # Try downloading from chromedriver.chromium.org (new official source)
-          mkdir -p chromedriver-temp
-          cd chromedriver-temp
+          # Install webdriver-manager
+          pip3 install webdriver-manager
           
-          # Use the new Chrome for Testing endpoint
-          CHROMEDRIVER_DOWNLOAD_URL="https://edgedl.me/chrome-for-testing/${CHROME_VERSION}.0.0.0/linux-x64/chromedriver-linux64.zip"
+          # Create a Python script to download ChromeDriver
+          cat > download_driver.py << 'EOF'
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_type import OSType
+import shutil
+import os
+
+try:
+    # Download ChromeDriver using webdriver-manager
+    driver_path = ChromeDriverManager().install()
+    print(f"Downloaded ChromeDriver: {driver_path}")
+    
+    # Copy to /usr/local/bin
+    dest_path = "/usr/local/bin/chromedriver"
+    shutil.copy(driver_path, dest_path)
+    os.chmod(dest_path, 0o755)
+    print(f"Copied to {dest_path}")
+    
+except Exception as e:
+    print(f"Error: {e}")
+    exit(1)
+EOF
           
-          # Try alternative download if first fails
-          if ! wget -q "$CHROMEDRIVER_DOWNLOAD_URL" 2>/dev/null; then
-            echo "Trying alternative download method..."
-            # Fallback: Use WebDriver Manager or build from source
-            CHROMEDRIVER_DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}.0.0.0/linux-x64/chromedriver-linux64.zip"
-            wget -q "$CHROMEDRIVER_DOWNLOAD_URL" 2>/dev/null || {
-              echo "Downloading latest stable ChromeDriver..."
-              wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O latest_version.txt
-              LATEST_VERSION=$(cat latest_version.txt)
-              wget -q "https://chromedriver.storage.googleapis.com/$LATEST_VERSION/chromedriver_linux64.zip"
-            }
-          fi
+          # Run the Python script
+          python3 download_driver.py
           
-          unzip -o chromedriver-linux64.zip || unzip -o chromedriver*.zip
-          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/ || sudo mv chromedriver /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
+          # Verify installation
           chromedriver --version
-          
-          cd ..
-          rm -rf chromedriver-temp
+          echo "✅ ChromeDriver installed successfully"
       
       - name: Download Selenium JARs
         run: |
@@ -117,12 +123,27 @@ jobs:
           echo "✅ Selenium setup complete"
           du -sh selenium-java/
       
+      - name: Check if DAMSMentor.java exists
+        run: |
+          if [ ! -f "DAMSMentor.java" ]; then
+            echo "❌ ERROR: DAMSMentor.java not found in repository!"
+            echo "📍 Current directory: $(pwd)"
+            echo "📁 Files in repo:"
+            ls -la
+            exit 1
+          else
+            echo "✅ DAMSMentor.java found!"
+          fi
+      
       - name: Update configuration in Java file
         if: github.event_name == 'workflow_dispatch'
         run: |
+          echo "📝 Updating configuration..."
           sed -i 's/private static final String PHONE_NUMBER = ".*";/private static final String PHONE_NUMBER = "${{ github.event.inputs.phone_number }}";/' DAMSMentor.java
           sed -i 's/private static final String OTP = ".*";/private static final String OTP = "${{ github.event.inputs.otp }}";/' DAMSMentor.java
           sed -i 's/private static final int NUMBER_OF_BOOKINGS = .*;/private static final int NUMBER_OF_BOOKINGS = ${{ github.event.inputs.number_of_bookings }};/' DAMSMentor.java
+          echo "✅ Configuration updated!"
+          grep "PHONE_NUMBER\|OTP\|NUMBER_OF_BOOKINGS" DAMSMentor.java | head -3
       
       - name: Update configuration from secrets
         if: github.event_name == 'schedule'
