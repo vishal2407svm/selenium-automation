@@ -19,18 +19,25 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Compile and Run
+      - name: Verify Library Files
         run: |
-          echo "Checking files..."
-          ls -R
-          
-          # ✅ FIXED: Sahi filename use kiya hai
+          if [ ! -d "lib" ]; then
+            echo "❌ ERROR: 'lib' folder not found in repository!"
+            echo "Please create a 'lib' folder and upload Selenium JAR files there."
+            exit 1
+          fi
+          echo "✅ 'lib' folder found. Listing JARs..."
+          ls lib/*.jar
+
+      - name: Compile and Run Script
+        run: |
+          # Compile (Use JARs from lib folder)
           javac -cp "lib/*:." MentorDAMS.java
           
-          # ✅ FIXED: Class run karte waqt '.java' nahi lagate
+          # Run
           java -cp "lib/*:." MentorDAMS
 
-      - name: Upload Screenshots & Report
+      - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
