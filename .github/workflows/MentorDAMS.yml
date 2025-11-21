@@ -40,29 +40,50 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
       
-      - name: Install ChromeDriver
+      - name: Install ChromeDriver (New Method)
         run: |
           CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1)
           echo "Chrome version: $CHROME_VERSION"
           
-          # Download matching ChromeDriver
-          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-          echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
+          # Download matching ChromeDriver from new Google endpoint
+          CHROMEDRIVER_URL="https://googlechromelabs.github.io/chrome-for-testing/"
           
-          wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
-          unzip chromedriver_linux64.zip
-          sudo mv chromedriver /usr/local/bin/
+          # Try downloading from chromedriver.chromium.org (new official source)
+          mkdir -p chromedriver-temp
+          cd chromedriver-temp
+          
+          # Use the new Chrome for Testing endpoint
+          CHROMEDRIVER_DOWNLOAD_URL="https://edgedl.me/chrome-for-testing/${CHROME_VERSION}.0.0.0/linux-x64/chromedriver-linux64.zip"
+          
+          # Try alternative download if first fails
+          if ! wget -q "$CHROMEDRIVER_DOWNLOAD_URL" 2>/dev/null; then
+            echo "Trying alternative download method..."
+            # Fallback: Use WebDriver Manager or build from source
+            CHROMEDRIVER_DOWNLOAD_URL="https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}.0.0.0/linux-x64/chromedriver-linux64.zip"
+            wget -q "$CHROMEDRIVER_DOWNLOAD_URL" 2>/dev/null || {
+              echo "Downloading latest stable ChromeDriver..."
+              wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE" -O latest_version.txt
+              LATEST_VERSION=$(cat latest_version.txt)
+              wget -q "https://chromedriver.storage.googleapis.com/$LATEST_VERSION/chromedriver_linux64.zip"
+            }
+          fi
+          
+          unzip -o chromedriver-linux64.zip || unzip -o chromedriver*.zip
+          sudo mv chromedriver-linux64/chromedriver /usr/local/bin/ || sudo mv chromedriver /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
           chromedriver --version
+          
+          cd ..
+          rm -rf chromedriver-temp
       
       - name: Download Selenium JARs
         run: |
           mkdir -p selenium-java
           cd selenium-java
           
-          # Download Selenium Java bindings
-          wget https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.15.0/selenium-java-4.15.0.zip
-          unzip selenium-java-4.15.0.zip
+          # Download Selenium Java bindings (Latest version)
+          wget -q https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.15.0/selenium-java-4.15.0.zip
+          unzip -o selenium-java-4.15.0.zip
           mv selenium-java-4.15.0/* .
           rm -rf selenium-java-4.15.0 selenium-java-4.15.0.zip
           
@@ -116,5 +137,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -rf selenium-java
+          rm -rf selenium-java chromedriver-temp
           echo "Cleanup completed"
