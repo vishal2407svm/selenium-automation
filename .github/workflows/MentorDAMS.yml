@@ -27,163 +27,71 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up JDK 11
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'  # Updated to 17 (Better for newer Selenium)
           distribution: 'temurin'
       
-      - name: Install Chrome
+      - name: Check Chrome Version (Debug)
         run: |
-          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-      
-      - name: Install ChromeDriver (WebDriver Manager)
-        run: |
-          CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1)
-          echo "Chrome version: $CHROME_VERSION"
-          
-          # Install Python if not available
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip
-          
-          # Install webdriver-manager
-          pip3 install webdriver-manager
-          
-          # Create a Python script to download ChromeDriver
-          cat > download_driver.py << 'EOF'
-from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.core.os_type import OSType
-import shutil
-import os
-
-try:
-    # Download ChromeDriver using webdriver-manager
-    driver_path = ChromeDriverManager().install()
-    print(f"Downloaded ChromeDriver: {driver_path}")
-    
-    # Copy to /usr/local/bin
-    dest_path = "/usr/local/bin/chromedriver"
-    shutil.copy(driver_path, dest_path)
-    os.chmod(dest_path, 0o755)
-    print(f"Copied to {dest_path}")
-    
-except Exception as e:
-    print(f"Error: {e}")
-    exit(1)
-EOF
-          
-          # Run the Python script
-          python3 download_driver.py
-          
-          # Verify installation
+          google-chrome --version
           chromedriver --version
-          echo "✅ ChromeDriver installed successfully"
+          which chromedriver
       
-      - name: Download Selenium JARs
+      - name: Download Selenium Libraries
         run: |
-          mkdir -p selenium-java
-          cd selenium-java
+          mkdir -p libs
+          # Downloading Selenium 4.16.1 (Stable)
+          wget -q https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.16.0/selenium-java-4.16.1.zip
+          unzip -o selenium-java-4.16.1.zip
           
-          # Download Selenium Java bindings (Latest version)
-          echo "📥 Downloading Selenium 4.15.0..."
-          wget -q https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.15.0/selenium-java-4.15.0.zip
+          # Flatten the JARs into one folder for easier classpath
+          cp selenium-java-4.16.1/*.jar libs/
+          cp selenium-java-4.16.1/lib/*.jar libs/
           
-          echo "📦 Extracting files..."
-          unzip -o selenium-java-4.15.0.zip
-          
-          echo "🔍 Checking folder structure..."
-          ls -la | head -20
-          
-          # Remove zip file
-          rm -f selenium-java-4.15.0.zip
-          
-          # Move files if they're in a subfolder
-          if [ -d "selenium-java-4.15.0" ]; then
-            echo "✅ Found subfolder, moving files..."
-            cp -r selenium-java-4.15.0/* .
-            rm -rf selenium-java-4.15.0
-          fi
-          
-          # Verify main JAR exists
-          echo "🔎 Verifying Selenium JAR..."
-          if ls *.jar 1> /dev/null 2>&1; then
-            echo "✅ Selenium files ready!"
-            echo "JAR count: $(ls *.jar | wc -l)"
-          else
-            echo "❌ ERROR: No JAR files found!"
-            pwd
-            ls -la
-            exit 1
-          fi
-          
-          cd ..
-          echo "✅ Selenium setup complete"
-          du -sh selenium-java/
+          echo "✅ Dependencies downloaded. JAR count:"
+          ls libs/*.jar | wc -l
       
       - name: Check if DAMSMentor.java exists
         run: |
           if [ ! -f "DAMSMentor.java" ]; then
-            echo "❌ ERROR: DAMSMentor.java not found in repository!"
-            echo "📍 Current directory: $(pwd)"
-            echo "📁 Files in repo:"
+            echo "❌ ERROR: DAMSMentor.java not found!"
             ls -la
             exit 1
-          else
-            echo "✅ DAMSMentor.java found!"
           fi
       
-      - name: Update configuration in Java file
+      - name: Update configuration (Manual Trigger)
         if: github.event_name == 'workflow_dispatch'
         run: |
           echo "📝 Updating configuration..."
           sed -i 's/private static final String PHONE_NUMBER = ".*";/private static final String PHONE_NUMBER = "${{ github.event.inputs.phone_number }}";/' DAMSMentor.java
           sed -i 's/private static final String OTP = ".*";/private static final String OTP = "${{ github.event.inputs.otp }}";/' DAMSMentor.java
           sed -i 's/private static final int NUMBER_OF_BOOKINGS = .*;/private static final int NUMBER_OF_BOOKINGS = ${{ github.event.inputs.number_of_bookings }};/' DAMSMentor.java
-          echo "✅ Configuration updated!"
-          grep "PHONE_NUMBER\|OTP\|NUMBER_OF_BOOKINGS" DAMSMentor.java | head -3
       
-      - name: Update configuration from secrets
+      - name: Update configuration (Scheduled)
         if: github.event_name == 'schedule'
         run: |
+          echo "📝 Updating configuration from Secrets..."
           sed -i 's/private static final String PHONE_NUMBER = ".*";/private static final String PHONE_NUMBER = "${{ secrets.PHONE_NUMBER }}";/' DAMSMentor.java
           sed -i 's/private static final String OTP = ".*";/private static final String OTP = "${{ secrets.OTP }}";/' DAMSMentor.java
       
       - name: Compile Java code
         run: |
-          javac -cp ".:selenium-java/*:selenium-java/lib/*" DAMSMentor.java
+          javac -cp ".:libs/*" DAMSMentor.java
       
       - name: Run automation
         run: |
-          java -cp ".:selenium-java/*:selenium-java/lib/*" DAMSMentor
+          # Using xvfb just in case, though headless is set in Java
+          xvfb-run java -cp ".:libs/*" DAMSMentor
         timeout-minutes: 60
       
-      - name: Upload screenshots
+      - name: Upload Artifacts (Screenshots & Report)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-${{ github.run_number }}
-          path: screenshots/
-          retention-days: 7
-      
-      - name: Upload HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-${{ github.run_number }}
-          path: DAMS_Random_Booking_Report_*.html
-          retention-days: 7
-      
-      - name: Send notification on failure
-        if: failure()
-        run: |
-          echo "Automation failed! Check the logs for details."
-          # You can add email notification or Slack webhook here
-      
-      - name: Cleanup
-        if: always()
-        run: |
-          rm -rf selenium-java chromedriver-temp
-          echo "Cleanup completed"
+          name: execution-artifacts
+          path: |
+            screenshots/
+            *.html
+          retention-days: 5
