@@ -1,0 +1,120 @@
+name: DAMS Mentor Booking Automation
+
+on:
+  workflow_dispatch:  # Manual trigger
+    inputs:
+      phone_number:
+        description: 'Phone Number (with country code)'
+        required: true
+        default: '+919411611466'
+      otp:
+        description: 'OTP Code'
+        required: true
+        default: '2000'
+      number_of_bookings:
+        description: 'Number of bookings to make'
+        required: true
+        default: '5'
+  
+  schedule:
+    - cron: '0 6 * * *'  # Runs daily at 6 AM UTC (11:30 AM IST)
+
+jobs:
+  dams-automation:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+      
+      - name: Install Chrome
+        run: |
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+      
+      - name: Install ChromeDriver
+        run: |
+          CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d '.' -f 1)
+          echo "Chrome version: $CHROME_VERSION"
+          
+          # Download matching ChromeDriver
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          echo "ChromeDriver version: $CHROMEDRIVER_VERSION"
+          
+          wget -q "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+          unzip chromedriver_linux64.zip
+          sudo mv chromedriver /usr/local/bin/
+          sudo chmod +x /usr/local/bin/chromedriver
+          chromedriver --version
+      
+      - name: Download Selenium JARs
+        run: |
+          mkdir -p selenium-java
+          cd selenium-java
+          
+          # Download Selenium Java bindings
+          wget https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.15.0/selenium-java-4.15.0.zip
+          unzip selenium-java-4.15.0.zip
+          mv selenium-java-4.15.0/* .
+          rm -rf selenium-java-4.15.0 selenium-java-4.15.0.zip
+          
+          cd ..
+          ls -la selenium-java/
+      
+      - name: Update configuration in Java file
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          sed -i 's/private static final String PHONE_NUMBER = ".*";/private static final String PHONE_NUMBER = "${{ github.event.inputs.phone_number }}";/' DAMSMentor.java
+          sed -i 's/private static final String OTP = ".*";/private static final String OTP = "${{ github.event.inputs.otp }}";/' DAMSMentor.java
+          sed -i 's/private static final int NUMBER_OF_BOOKINGS = .*;/private static final int NUMBER_OF_BOOKINGS = ${{ github.event.inputs.number_of_bookings }};/' DAMSMentor.java
+      
+      - name: Update configuration from secrets
+        if: github.event_name == 'schedule'
+        run: |
+          sed -i 's/private static final String PHONE_NUMBER = ".*";/private static final String PHONE_NUMBER = "${{ secrets.PHONE_NUMBER }}";/' DAMSMentor.java
+          sed -i 's/private static final String OTP = ".*";/private static final String OTP = "${{ secrets.OTP }}";/' DAMSMentor.java
+      
+      - name: Compile Java code
+        run: |
+          javac -cp ".:selenium-java/*:selenium-java/lib/*" DAMSMentor.java
+      
+      - name: Run automation
+        run: |
+          java -cp ".:selenium-java/*:selenium-java/lib/*" DAMSMentor
+        timeout-minutes: 60
+      
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_number }}
+          path: screenshots/
+          retention-days: 7
+      
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ github.run_number }}
+          path: DAMS_Random_Booking_Report_*.html
+          retention-days: 7
+      
+      - name: Send notification on failure
+        if: failure()
+        run: |
+          echo "Automation failed! Check the logs for details."
+          # You can add email notification or Slack webhook here
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf selenium-java
+          echo "Cleanup completed"
