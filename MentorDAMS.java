@@ -12,7 +12,8 @@ import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.util.*;
 
-public class DAMSMentor {
+// ✅ NAME FIXED: Ab ye filename (MentorDAMS.java) se match karega
+public class MentorDAMS {
 
     private static final String PHONE_NUMBER = "+919411611466";
     private static final String OTP = "2000";
