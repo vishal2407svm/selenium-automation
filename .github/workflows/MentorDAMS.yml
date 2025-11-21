@@ -21,19 +21,17 @@ jobs:
 
       - name: Compile and Run
         run: |
-          # 1. Pehle check karo folder structure sahi hai ya nahi (Debugging ke liye)
           echo "Checking files..."
           ls -R
           
-          # 2. Compile Java File (Code ko machine language me badalna)
-          # 'lib/*' ka matlab lib folder ki saari jar files use karo
-          javac -cp "lib/*:." DAMSMentor.java
+          # ✅ FIXED: Sahi filename use kiya hai
+          javac -cp "lib/*:." MentorDAMS.java
           
-          # 3. Run Java File
-          java -cp "lib/*:." DAMSMentor
+          # ✅ FIXED: Class run karte waqt '.java' nahi lagate
+          java -cp "lib/*:." MentorDAMS
 
       - name: Upload Screenshots & Report
-        if: always()  # Agar error aaye tab bhi report upload karo
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: automation-evidence
