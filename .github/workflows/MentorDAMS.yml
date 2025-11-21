@@ -1,94 +1,49 @@
-name: DAMS Mentor Booking Automation
+name: Selenium Automation Run
 
 on:
-  workflow_dispatch:
-    inputs:
-      phone_number:
-        description: 'Phone Number (with country code)'
-        required: true
-        default: '+919411611466'
-      otp:
-        description: 'OTP Code'
-        required: true
-        default: '2000'
-      number_of_bookings:
-        description: 'Number of bookings to make'
-        required: true
-        default: '5'
-
-  schedule:
-    - cron: '0 6 * * *'   # Runs daily at 6 AM UTC (11:30 AM IST)
+  push:
+    branches: [ main ]
+  pull_request:
 
 jobs:
-  dams-automation:
+  run-tests:
     runs-on: ubuntu-latest
 
     steps:
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
-          java-version: '17'
           distribution: 'temurin'
+          java-version: '17'
 
-      - name: Install Chrome & ChromeDriver
+      - name: Install Chrome Stable
         uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
 
-      - name: Check Chrome Version (Debug)
-        run: |
-          google-chrome --version
-          chromedriver --version
-          which chromedriver
+      - name: Install ChromeDriver Stable
+        uses: nanasess/setup-chromedriver@v2
 
-      - name: Download Selenium Libraries
-        run: |
-          mkdir -p libs
-          wget -q https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.16.1/selenium-java-4.16.1.zip
-          unzip -o selenium-java-4.16.1.zip -d selenium-temp
-          cp selenium-temp/selenium-java-4.16.1/*.jar libs/
-          cp selenium-temp/selenium-java-4.16.1/lib/*.jar libs/
-          echo "JAR count:"
-          ls libs/*.jar | wc -l
+      - name: Verify Chrome Version
+        run: google-chrome --version
 
-      - name: Check if DAMSMentor.java exists
-        run: |
-          if [ ! -f "DAMSMentor.java" ]; then
-            echo "ERROR: DAMSMentor.java not found!"
-            ls -la
-            exit 1
-          fi
+      - name: Verify ChromeDriver Version
+        run: chromedriver --version
 
-      - name: Update configuration (Manual Trigger)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          sed -i 's/private static final String PHONE_NUMBER = ".*";/private static final String PHONE_NUMBER = "${{ github.event.inputs.phone_number }}";/' DAMSMentor.java
-          sed -i 's/private static final String OTP = ".*";/private static final String OTP = "${{ github.event.inputs.otp }}";/' DAMSMentor.java
-          sed -i 's/private static final int NUMBER_OF_BOOKINGS = .*;/private static final int NUMBER_OF_BOOKINGS = ${{ github.event.inputs.number_of_bookings }};/' DAMSMentor.java
+      - name: Create libs folder (avoid exit code 8)
+        run: mkdir -p libs
 
-      - name: Update configuration (Scheduled Run)
-        if: github.event_name == 'schedule'
-        run: |
-          sed -i 's/private static final String PHONE_NUMBER = ".*";/private static final String PHONE_NUMBER = "${{ secrets.PHONE_NUMBER }}";/' DAMSMentor.java
-          sed -i 's/private static final String OTP = ".*";/private static final String OTP = "${{ secrets.OTP }}";/' DAMSMentor.java
+      - name: Build and Run Tests
+        run: mvn clean test
 
-      - name: Compile Java project
-        run: |
-          javac -cp ".:libs/*" DAMSMentor.java
-
-      - name: Run automation
-        run: |
-          xvfb-run java -cp ".:libs/*" DAMSMentor
-        timeout-minutes: 60
-
-      - name: Upload Artifacts (Screenshots + Report)
-        if: always()
+      - name: Upload Failed Test Screenshots
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: execution-artifacts
+          name: screenshots
           path: |
             screenshots/
             *.html
-          retention-days: 7
