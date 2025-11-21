@@ -1,16 +1,14 @@
-name: DAMS Selenium Automation (Direct Java)
+name: DAMS Selenium Automation
 
 on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
-  schedule:
-    - cron: '0 6 * * *'
 
 jobs:
   selenium-tests:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -29,21 +27,12 @@ jobs:
       - name: Install ChromeDriver
         uses: nanasess/setup-chromedriver@v2
 
-      - name: Verify Installations
+      - name: Create Necessary Folders
         run: |
-          echo "Java Version:"
-          java -version
-          echo "Chrome Version:"
-          google-chrome --version
-          echo "ChromeDriver Version:"
-          chromedriver --version
-
-      - name: Create Directories
-        run: |
-          mkdir -p screenshots
           mkdir -p libs
+          mkdir -p screenshots
 
-      - name: Download Selenium Dependencies
+      - name: Download Selenium Jars
         run: |
           cd libs
           wget https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.15.0/selenium-java-4.15.0.zip
@@ -51,60 +40,21 @@ jobs:
           mv selenium-java-4.15.0/*.jar .
           mv selenium-java-4.15.0/lib/*.jar .
           rm -rf selenium-java-4.15.0 selenium-java-4.15.0.zip
-          ls -lah
-
-      - name: Set Environment Variables
-        run: |
-          echo "CI=true" >> $GITHUB_ENV
-          echo "DISPLAY=:99" >> $GITHUB_ENV
-
-      - name: Start Virtual Display
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb
-          Xvfb :99 -screen 0 1920x1080x24 &
-          sleep 3
 
       - name: Compile Java Code
         run: |
           javac -cp "libs/*" DAMSMentor.java
 
-      - name: Run Automation
+      - name: Run Java Automation
         run: |
           java -cp ".:libs/*" DAMSMentor
         continue-on-error: true
 
-      - name: List Generated Files
-        if: always()
-        run: |
-          echo "=== Current Directory ==="
-          ls -lah
-          echo ""
-          echo "=== Screenshots ==="
-          ls -lah screenshots/ || echo "No screenshots"
-          echo ""
-          echo "=== Reports ==="
-          ls -lah *.html || echo "No reports"
-
-      - name: Upload Results
+      - name: Upload Results (Screenshots + Reports)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: automation-results-${{ github.run_number }}
+          name: automation-output-${{ github.run_number }}
           path: |
             screenshots/
             *.html
-            *.log
-          retention-days: 7
-          if-no-files-found: warn
-
-      - name: Final Status
-        if: always()
-        run: |
-          if [ -d "screenshots" ] && [ "$(ls -A screenshots 2>/dev/null)" ]; then
-            echo "✅ Automation ran - Screenshots generated"
-            exit 0
-          else
-            echo "⚠️ Automation completed but no screenshots found"
-            exit 0
-          fi
