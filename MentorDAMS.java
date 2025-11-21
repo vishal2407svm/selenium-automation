@@ -15,7 +15,8 @@ import java.util.*;
 
 public class DAMSMentor {
     
-    // Configuration - Will be updated by GitHub Actions
+    // Configuration - Will be updated by GitHub Actions YAML inputs or secrets
+    // The sed commands in the YAML workflow will replace these default values.
     private static final String PHONE_NUMBER = "+919411611466";
     private static final String OTP = "2000";
     private static final int NUMBER_OF_BOOKINGS = 5;
@@ -32,10 +33,18 @@ public class DAMSMentor {
     
     public static void main(String[] args) {
         try {
+            // Create screenshots directory
             new File("screenshots").mkdirs();
             
+            // If running on GitHub Actions, the arguments will be replaced by sed
+            // but for safety, we check if command line arguments were provided (e.g., local run)
+            if (args.length >= 3) {
+                 // Note: Since we are using SED in YAML, this command line argument logic is not strictly needed for CI,
+                 // but helps if running locally and passing args. We rely on SED for CI.
+            }
+
             log("╔═══════════════════════════════════════════╗");
-            log("║  DAMS MENTOR DESK - RANDOM 5 BOOKINGS    ║");
+            log("║  DAMS MENTOR DESK - RANDOM BOOKINGS       ║");
             log("╚═══════════════════════════════════════════╝");
             log("");
             log("📋 Configuration:");
@@ -71,6 +80,7 @@ public class DAMSMentor {
     private static void setupDriver() {
         log("🔧 Setting up Chrome driver...");
         
+        // CI environment check for headless mode
         boolean isCI = System.getenv("CI") != null;
         
         ChromeOptions options = new ChromeOptions();
@@ -88,6 +98,7 @@ public class DAMSMentor {
             log("✅ Running in headless mode (CI environment)");
         } else {
             options.addArguments("--start-maximized");
+            // Local driver setup (Windows assumed)
             String driverPath = "chromedriver.exe";
             File driverFile = new File(driverPath);
             if (driverFile.exists()) {
@@ -116,6 +127,7 @@ public class DAMSMentor {
             sleep(3);
             log("✅ Loaded damsdelhi.com");
             
+            // Click Sign In button/link
             try {
                 WebElement signInBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
@@ -130,6 +142,7 @@ public class DAMSMentor {
                 sleep(3);
             }
             
+            // Enter Phone Number
             WebElement phoneInput = wait.until(ExpectedConditions.presenceOfElementLocated(
                 By.xpath("//input[@type='tel' or @type='number' or contains(@placeholder, 'number')]")));
             phoneInput.clear();
@@ -137,12 +150,14 @@ public class DAMSMentor {
             log("✅ Entered phone number");
             sleep(2);
             
+            // Click Request OTP
             WebElement otpBtn = wait.until(ExpectedConditions.elementToBeClickable(
                 By.className("common-bottom-btn")));
             js.executeScript("arguments[0].click();", otpBtn);
             log("✅ Clicked Request OTP");
             sleep(3);
             
+            // Handle possible existing session logout popup
             try {
                 WebElement logoutBtn = driver.findElement(
                     By.xpath("//button[contains(@class, 'btndata') and contains(text(), 'Logout')]"));
@@ -153,6 +168,7 @@ public class DAMSMentor {
                 log("ℹ️  No logout popup");
             }
             
+            // Enter OTP
             WebElement otpInput = wait.until(ExpectedConditions.presenceOfElementLocated(
                 By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]")));
             otpInput.clear();
@@ -160,6 +176,7 @@ public class DAMSMentor {
             log("✅ Entered OTP");
             sleep(2);
             
+            // Submit OTP
             WebElement submitBtn = wait.until(ExpectedConditions.elementToBeClickable(
                 By.className("common-bottom-btn")));
             js.executeScript("arguments[0].click();", submitBtn);
@@ -240,7 +257,7 @@ public class DAMSMentor {
             "var elements = document.querySelectorAll('*');" +
             "for(var i = 0; i < elements.length; i++) {" +
             "  if(elements[i].textContent.trim() === 'Mentor Desk' && " +
-            "     elements[i].offsetParent !== null) {" +
+            "      elements[i].offsetParent !== null) {" +
             "    elements[i].click();" +
             "    return true;" +
             "  }" +
@@ -514,11 +531,11 @@ public class DAMSMentor {
             
             try {
                 buyBtn.click();
-                log("✅ Clicked Buy button");
             } catch (Exception e) {
                 js.executeScript("arguments[0].click();", buyBtn);
-                log("✅ Clicked Buy button (JS)");
             }
+            
+            log("✅ Clicked Buy button");
             
             sleep(3);
             
@@ -615,6 +632,7 @@ public class DAMSMentor {
         log("💳 Completing payment process...");
         
         try {
+            // Select Paytm
             try {
                 By[] paytmSelectors = {
                     By.xpath("//label[.//span[contains(text(), 'Paytm')]]"),
@@ -636,6 +654,7 @@ public class DAMSMentor {
                 log("ℹ️  Paytm selection skipped");
             }
             
+            // Click Pay Now
             By[] paymentBtnSelectors = {
                 By.xpath("//button[@type='button' and contains(@class, 'ant-btn-primary') and contains(@class, 'ant-btn-block')]"),
                 By.xpath("//button[contains(text(), 'Pay Now') or contains(text(), 'Place Order')]")
@@ -697,10 +716,11 @@ public class DAMSMentor {
     
     private static void closePaymentWindow() {
         try {
+            // Close button (X or cross)
             By[] closeSelectors = {
                 By.xpath("//span[contains(@class, 'ptm-cross') and @id='app-close-btn']"),
                 By.id("app-close-btn"),
-                By.xpath("//span[contains(@class, 'ptm-cross')]")
+                By.xpath("//span[contains(@class, 'ant-modal-close-x')]")
             };
             
             for (By selector : closeSelectors) {
@@ -713,6 +733,7 @@ public class DAMSMentor {
                 } catch (Exception e) {}
             }
             
+            // Skip button
             By[] skipSelectors = {
                 By.xpath("//button[contains(@class, 'ptm-feedback-btn') and contains(text(), 'Skip')]"),
                 By.xpath("//button[contains(text(), 'Skip')]")
@@ -727,8 +748,8 @@ public class DAMSMentor {
                 } catch (Exception e) {}
             }
             
+            // Generic modal close button
             By[] modalSelectors = {
-                By.xpath("//span[contains(@class, 'ant-modal-close-x')]"),
                 By.xpath("//button[contains(@class, 'ant-modal-close')]")
             };
             
