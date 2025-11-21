@@ -82,29 +82,40 @@ jobs:
           cd selenium-java
           
           # Download Selenium Java bindings (Latest version)
+          echo "📥 Downloading Selenium 4.15.0..."
           wget -q https://github.com/SeleniumHQ/selenium/releases/download/selenium-4.15.0/selenium-java-4.15.0.zip
+          
+          echo "📦 Extracting files..."
           unzip -o selenium-java-4.15.0.zip
           
-          # Check if extraction created a subfolder or direct files
-          if [ -d "selenium-java-4.15.0" ]; then
-            echo "Moving files from subfolder..."
-            mv selenium-java-4.15.0/* .
-            rmdir selenium-java-4.15.0
-          fi
+          echo "🔍 Checking folder structure..."
+          ls -la | head -20
           
           # Remove zip file
           rm -f selenium-java-4.15.0.zip
           
-          # Verify files exist
-          if [ ! -f "selenium-java-4.15.0.jar" ]; then
-            echo "ERROR: Selenium JAR files not found!"
+          # Move files if they're in a subfolder
+          if [ -d "selenium-java-4.15.0" ]; then
+            echo "✅ Found subfolder, moving files..."
+            cp -r selenium-java-4.15.0/* .
+            rm -rf selenium-java-4.15.0
+          fi
+          
+          # Verify main JAR exists
+          echo "🔎 Verifying Selenium JAR..."
+          if ls *.jar 1> /dev/null 2>&1; then
+            echo "✅ Selenium files ready!"
+            echo "JAR count: $(ls *.jar | wc -l)"
+          else
+            echo "❌ ERROR: No JAR files found!"
+            pwd
             ls -la
             exit 1
           fi
           
           cd ..
-          echo "✅ Selenium files ready:"
-          ls -la selenium-java/ | head -20
+          echo "✅ Selenium setup complete"
+          du -sh selenium-java/
       
       - name: Update configuration in Java file
         if: github.event_name == 'workflow_dispatch'
